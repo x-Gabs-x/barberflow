@@ -1,6 +1,6 @@
 # BarberFlow
 
-Sistema de gestão para barbearias, feito como projeto acadêmico da UNIFACISA.
+Sistema de gestão para barbearias.
 
 ## O problema
 
