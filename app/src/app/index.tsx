@@ -1,30 +1,26 @@
-import { useState } from 'react';
 import { ScrollView, Text } from 'react-native';
+import { useRouter } from 'expo-router';
 import Botao from '../components/Botao';
-import Campo from '../components/Campo';
-import Card from '../components/Card';
-import SeloStatus from '../components/SeloStatus';
 import { cores } from '../theme';
 
-export default function Componentes() {
-  const [cpf, setCpf] = useState('');
+const atalhos: [string, string][] = [
+  ['Login (Parte 2)', '/acesso/login'],
+  ['Criar conta (Parte 2)', '/acesso/cadastro'],
+  ['Dono: agenda', '/dono/agenda'],
+  ['Parceiro: agenda', '/parceiro/agenda'],
+  ['Recepção: atendimentos', '/recepcao/atendimentos'],
+  ['Componentes', '/componentes'],
+];
+
+export default function Menu() {
+  const router = useRouter();
   return (
-    <ScrollView style={{ backgroundColor: cores.fundo }} contentContainerStyle={{ padding: 20, gap: 16, paddingTop: 60 }}>
-      <Text style={{ fontSize: 30, fontWeight: '700', color: cores.marinho }}>Componentes</Text>
-      <Card>
-        <Campo rotulo="CPF" valor={cpf} onChangeText={setCpf} keyboardType="numeric" placeholder="000.000.000-00" />
-        <Campo rotulo="Senha" valor="" onChangeText={() => {}} secureTextEntry erro="Exemplo de erro" />
-      </Card>
-      <Card>
-        <SeloStatus tipo="registrado" />
-        <SeloStatus tipo="validado" />
-        <SeloStatus tipo="pendente" />
-        <SeloStatus tipo="ativo" />
-      </Card>
-      <Botao titulo="Entrar" />
-      <Botao titulo="Cancelar" variante="secundario" />
-      <Botao titulo="Remover" variante="perigo" />
-      <Botao titulo="Desabilitado" desabilitado />
+    <ScrollView style={{ backgroundColor: cores.fundo }} contentContainerStyle={{ padding: 20, gap: 12, paddingTop: 60 }}>
+      <Text style={{ fontSize: 30, fontWeight: '700', color: cores.marinho }}>BarberFlow</Text>
+      <Text style={{ color: cores.textoSuave }}>Menu de desenvolvimento: atalhos para todas as telas.</Text>
+      {atalhos.map(([titulo, rota]) => (
+        <Botao key={rota} titulo={titulo} variante="secundario" onPress={() => router.push(rota as any)} />
+      ))}
     </ScrollView>
   );
 }
