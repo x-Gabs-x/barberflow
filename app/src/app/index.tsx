@@ -4,8 +4,8 @@ import Botao from '../components/Botao';
 import { cores } from '../theme';
 
 const atalhos: [string, string][] = [
-  ['Login (Parte 2)', '/acesso/login'],
-  ['Criar conta (Parte 2)', '/acesso/cadastro'],
+  ['Login', '/acesso/login'],
+  ['Criar conta', '/acesso/cadastro'],
   ['Dono: agenda', '/dono/agenda'],
   ['Parceiro: agenda', '/parceiro/agenda'],
   ['Recepção: atendimentos', '/recepcao/atendimentos'],
