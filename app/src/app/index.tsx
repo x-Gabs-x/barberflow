@@ -10,6 +10,7 @@ const atalhos: [string, string][] = [
   ['Parceiro: agenda', '/parceiro/agenda'],
   ['Recepção: atendimentos', '/recepcao/atendimentos'],
   ['Componentes', '/componentes'],
+  ['Teste da API', '/teste-api'],
 ];
 
 export default function Menu() {
