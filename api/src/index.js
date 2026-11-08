@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const supabase = require('./supabase');
-const { autenticar, exigirPerfil } = require('./middlewares/autenticar');
+const {autenticar} = require('./middlewares/autenticar');
 
 const app = express();
 app.use(cors());
