@@ -20,14 +20,28 @@ export function definirSessao(novos: Partial<Sessao>) {
   Object.assign(sessao, novos);
 }
 
+export type CampoComErro = { campo: string; mensagem: string };
+
 export class ErroApi extends Error {
   status: number;
   codigo: string;
-  constructor(status: number, codigo: string, mensagem: string) {
+  campos: CampoComErro[];
+  constructor(status: number, codigo: string, mensagem: string, campos: CampoComErro[] = []) {
     super(mensagem);
     this.status = status;
     this.codigo = codigo;
+    this.campos = campos;
   }
+}
+
+export function errosPorCampo(erro: unknown): Record<string, string> {
+  const resultado: Record<string, string> = {};
+  if (!(erro instanceof ErroApi)) return resultado;
+  for (const { campo, mensagem } of erro.campos) {
+    const chave = campo === '' ? 'geral' : campo;
+    if (!resultado[chave]) resultado[chave] = mensagem;
+  }
+  return resultado;
 }
 
 async function chamar<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
@@ -45,7 +59,13 @@ async function chamar<T>(metodo: string, caminho: string, corpo?: unknown): Prom
   const dados = await resposta.json().catch(() => null);
 
   if (!resposta.ok) {
-    throw new ErroApi(resposta.status, dados?.erro ?? 'desconhecido', dados?.mensagem ?? 'Algo deu errado.');
+    const campos: CampoComErro[] = Array.isArray(dados?.campos) ? dados.campos : [];
+    throw new ErroApi(
+      resposta.status,
+      dados?.erro ?? 'desconhecido',
+      dados?.mensagem ?? 'Algo deu errado.',
+      campos
+    );
   }
   return dados as T;
 }

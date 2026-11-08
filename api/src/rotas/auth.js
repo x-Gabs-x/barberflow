@@ -1,7 +1,50 @@
 const express = require('express');
+const {
+  z, cpf, texto, telefone, email, senha,
+  aceiteTermos, perfilEquipe, idBarbearia, data, validar,
+} = require('../validar-dados');
 const router = express.Router();
 
-router.post('/login', (req, res) => {
+const dadosLogin = z
+  .object({
+    cpf,
+    senha: z.string().min(1, 'Informe a senha').max(72, 'Senha muito longa'),
+  })
+  .strict();
+
+const dadosCadastroDono = z
+  .object({
+    nome_completo: texto(),
+    cpf,
+    email,
+    telefone,
+    senha,
+    aceite_termos: aceiteTermos,
+    barbearia: z
+      .object({
+        nome: texto(80),
+        data_inicio: data,
+        telefone: telefone.optional(),
+        cidade: texto(80).optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
+const dadosCadastroEquipe = z
+  .object({
+    id_barbearia: idBarbearia,
+    perfil: perfilEquipe,
+    nome_completo: texto(),
+    cpf,
+    email,
+    telefone,
+    senha,
+    aceite_termos: aceiteTermos,
+  })
+  .strict();
+
+router.post('/login', validar(dadosLogin), (req, res) => {
   res.json({
     token: 'token-de-teste',
     usuario: { id: 'u1', nome_completo: 'Dono de Teste', perfil: 'dono' },
@@ -9,11 +52,11 @@ router.post('/login', (req, res) => {
   });
 });
 
-router.post('/cadastro/dono', (req, res) => {
-  res.status(201).json({ ok: true, mensagem: 'Código enviado por e-mail.' });
+router.post('/cadastro/dono', validar(dadosCadastroDono), (req, res) => {
+  res.status(201).json({ ok: true, mensagem: 'Cadastro realizado.' });
 });
 
-router.post('/cadastro/equipe', (req, res) => {
+router.post('/cadastro/equipe', validar(dadosCadastroEquipe), (req, res) => {
   res.status(201).json({ ok: true, status: 'aguardando', mensagem: 'Pedido enviado ao dono.' });
 });
 
