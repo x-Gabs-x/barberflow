@@ -3,8 +3,7 @@ const { exigirPerfil } = require('../middlewares/autenticar');
 const { equipe } = require('../dados-teste');
 const router = express.Router();
 const { z, percentual, validar } = require('../validar-dados');
-const aprovacao = z.object({ escote_percentual: percentual }).strict();
-
+const aprovacao = z.object({ escote_percentual: percentual.nullable() }).strict();
 
 const novoEscote = z.object({ percentual }).strict();
 
