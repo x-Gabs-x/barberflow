@@ -1,6 +1,7 @@
 const express = require('express');
 const supabase = require('../supabase');
 const { criarCadastroDono } = require('../servicos/cadastrar-dono');
+const { criarAutenticarLogin } = require('../servicos/autenticar-login');
 const {
   z, cpf, texto, telefone, email, senha,
   aceiteTermos, perfilEquipe, idBarbearia, data, validar,
@@ -46,13 +47,7 @@ const dadosCadastroEquipe = z
   })
   .strict();
 
-router.post('/login', validar(dadosLogin), (req, res) => {
-  res.json({
-    token: 'token-de-teste',
-    usuario: { id: 'u1', nome_completo: 'Dono de Teste', perfil: 'dono' },
-    barbearias: [{ id: 'b1', nome: '[Nome da barbearia]' }],
-  });
-});
+router.post('/login', validar(dadosLogin), criarAutenticarLogin(supabase));
 
 router.post('/cadastro/dono', validar(dadosCadastroDono), criarCadastroDono(supabase));
 
