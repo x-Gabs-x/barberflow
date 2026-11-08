@@ -1,12 +1,23 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { rateLimit } = require('express-rate-limit');
 const supabase = require('./supabase');
-const {autenticar} = require('./middlewares/autenticar');
+const { autenticar } = require('./middlewares/autenticar');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(cors({ origin: process.env.CORS_ORIGEM ? process.env.CORS_ORIGEM.split(',') : true }));
+app.use(express.json({ limit: '100kb' }));
+
+const limiteDeAcesso = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => process.env.DEV_SEM_LOGIN === 'true',
+  message: { erro: 'muitas_tentativas', mensagem: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },
+});
 
 app.get('/saude', async (req, res) => {
   const { error } = await supabase
@@ -14,13 +25,15 @@ app.get('/saude', async (req, res) => {
     .select('id', { head: true, count: 'exact' });
 
   if (error) {
-    return res.status(500).json({ erro: 'banco', mensagem: error.message });
+    console.error(error);
+    return res.status(500).json({ erro: 'banco', mensagem: 'Não foi possível falar com o banco.' });
   }
   res.json({ ok: true, banco: 'conectado' });
 });
 
-app.use('/auth', require('./rotas/auth'));
+app.use('/auth', limiteDeAcesso, require('./rotas/auth'));
 
+app.use('/me', autenticar, require('./rotas/me'));
 app.use('/agenda', autenticar, require('./rotas/agenda'));
 app.use('/atendimentos', autenticar, require('./rotas/atendimentos'));
 app.use('/atendimentos', autenticar, require('./rotas/validacao'));
@@ -29,6 +42,21 @@ app.use('/fechamento', autenticar, require('./rotas/fechamento'));
 app.use('/equipe', autenticar, require('./rotas/equipe'));
 app.use('/servicos', autenticar, require('./rotas/servicos'));
 app.use('/barbearia', autenticar, require('./rotas/barbearia'));
+
+app.use((req, res) => {
+  res.status(404).json({ erro: 'nao_encontrado', mensagem: 'Rota não encontrada.' });
+});
+
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ erro: 'json_invalido', mensagem: 'O corpo da requisição não é um JSON válido.' });
+  }
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ erro: 'corpo_grande', mensagem: 'O corpo da requisição é grande demais.' });
+  }
+  console.error(err);
+  res.status(500).json({ erro: 'erro_interno', mensagem: 'Algo deu errado. Tente novamente em instantes.' });
+});
 
 const porta = process.env.PORT || 3000;
 app.listen(porta, () => {
