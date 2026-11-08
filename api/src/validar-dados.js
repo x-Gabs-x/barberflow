@@ -31,6 +31,15 @@ const telefone = z
 
 const percentual = z.number().min(0, 'Mínimo 0').max(100, 'Máximo 100');
 
+const preco = z
+  .number()
+  .min(0, 'Preço não pode ser negativo')
+  .max(10000, 'Preço acima do limite')
+  .refine(
+    (v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6,
+    'Use no máximo 2 casas decimais'
+  );
+
 const formaPagamento = z.enum(['dinheiro', 'pix', 'cartao']);
 
 function validar(schema) {
@@ -51,4 +60,4 @@ function validar(schema) {
   };
 }
 
-module.exports = { z, cpf, texto, telefone, percentual, formaPagamento, validar, cpfValido };
+module.exports = { z, cpf, texto, telefone, percentual, preco, formaPagamento, validar, cpfValido };
