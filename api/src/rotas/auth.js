@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../supabase');
 const { criarCadastroDono } = require('../servicos/cadastrar-dono');
 const { criarAutenticarLogin } = require('../servicos/autenticar-login');
+const { criarCadastrarEquipe } = require('../servicos/cadastrar-equipe');
 const {
   z, cpf, texto, telefone, email, senha,
   aceiteTermos, perfilEquipe, idBarbearia, data, validar,
@@ -51,9 +52,7 @@ router.post('/login', validar(dadosLogin), criarAutenticarLogin(supabase));
 
 router.post('/cadastro/dono', validar(dadosCadastroDono), criarCadastroDono(supabase));
 
-router.post('/cadastro/equipe', validar(dadosCadastroEquipe), (req, res) => {
-  res.status(201).json({ ok: true, status: 'aguardando', mensagem: 'Pedido enviado ao dono.' });
-});
+router.post('/cadastro/equipe', validar(dadosCadastroEquipe), criarCadastrarEquipe(supabase));
 
 router.post('/verificar-email', (req, res) => res.json({ ok: true }));
 router.post('/reenviar-codigo', (req, res) => res.json({ ok: true }));
