@@ -2,6 +2,7 @@ import { ScrollView, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import Botao from '../components/Botao';
 import { cores } from '../theme';
+import { definirSessao } from '../api/cliente';
 
 const atalhos: [string, string][] = [
   ['Login', '/acesso/login'],
@@ -20,7 +21,12 @@ export default function Menu() {
       <Text style={{ fontSize: 30, fontWeight: '700', color: cores.marinho }}>BarberFlow</Text>
       <Text style={{ color: cores.textoSuave }}>Menu de desenvolvimento: atalhos para todas as telas.</Text>
       {atalhos.map(([titulo, rota]) => (
-        <Botao key={rota} titulo={titulo} variante="secundario" onPress={() => router.push(rota as any)} />
+        <Botao key={rota} titulo={titulo} variante="secundario" onPress={() => {
+          if (rota === '/dono/agenda' || rota === '/parceiro/agenda' || rota === '/recepcao/atendimentos') {
+            definirSessao({ token: null, barbearia: null, perfilDeTeste: rota.startsWith('/dono') ? 'dono' : rota.startsWith('/recepcao') ? 'recepcao' : 'parceiro' });
+          }
+          router.push(rota as any);
+        }} />
       ))}
     </ScrollView>
   );

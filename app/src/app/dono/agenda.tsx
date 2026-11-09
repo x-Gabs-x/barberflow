@@ -1,5 +1,2 @@
-﻿import TelaEmConstrucao from '../../components/TelaEmConstrucao';
-
-export default function Tela() {
-  return <TelaEmConstrucao titulo="Agenda" parte="Parte 3" />;
-}
+import AgendaParte3 from '../../components/AgendaParte3';
+export default function Tela() { return <AgendaParte3 perfil="dono" />; }

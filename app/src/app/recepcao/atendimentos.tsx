@@ -1,5 +1,5 @@
-﻿import TelaEmConstrucao from '../../components/TelaEmConstrucao';
+import RecepcaoAtendimentos from '../../components/RecepcaoAtendimentos';
 
 export default function Tela() {
-  return <TelaEmConstrucao titulo="Atendimentos" parte="Parte 4" />;
+  return <RecepcaoAtendimentos />;
 }

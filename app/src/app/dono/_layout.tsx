@@ -1,4 +1,4 @@
-﻿import { Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { cores } from '../../theme';
 
 export default function Layout() {

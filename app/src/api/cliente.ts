@@ -76,3 +76,15 @@ export const api = {
   patch: <T>(caminho: string, corpo?: unknown) => chamar<T>('PATCH', caminho, corpo),
   delete: <T>(caminho: string) => chamar<T>('DELETE', caminho),
 };
+export async function enviarComprovante(id: string, arquivo: Blob, mime: string) {
+  const cabecalhos: Record<string, string> = { 'Content-Type': mime };
+  if (sessao.token) cabecalhos.Authorization = `Bearer ${sessao.token}`;
+  if (sessao.perfilDeTeste) cabecalhos['x-dev-perfil'] = sessao.perfilDeTeste;
+  if (sessao.barbearia) cabecalhos['x-barbearia'] = sessao.barbearia;
+  const resposta = await fetch(`${URL_API}/atendimentos/${encodeURIComponent(id)}/comprovante`, {
+    method: 'POST', headers: cabecalhos, body: arquivo,
+  });
+  const dados = await resposta.json().catch(() => null);
+  if (!resposta.ok) throw new ErroApi(resposta.status, dados?.erro ?? 'arquivo_invalido', dados?.mensagem ?? 'Não foi possível enviar o comprovante.');
+  return dados as { comprovante_url: string | null; comprovante_anexado: boolean };
+}
