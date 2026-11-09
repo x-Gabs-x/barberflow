@@ -226,6 +226,50 @@ test('JWT retornado pode ser verificado pelo middleware e selecionar a barbearia
   assert.deepEqual(req.usuario, { id: ID, perfil: 'parceiro', estabelecimento_id: 'b2', escote_percentual: 40 });
 });
 
+test('middleware não expõe erros internos do Auth ou PostgreSQL ao validar a sessão', async () => {
+  for (const etapa of ['auth', 'vinculo']) {
+    const fakeAdmin = {
+      auth: { getUser: async () => {
+        if (etapa === 'auth') throw new Error('DETALHE_AUTH_PRIVADO');
+        return { data: { user: { id: ID } }, error: null };
+      } },
+      from() {
+        return {
+          select() { return this; },
+          eq() { return this; },
+          then(resolve, reject) {
+            return Promise.resolve({ data: null, error: { code: '42501', message: 'DETALHE_SQL_PRIVADO' } }).then(resolve, reject);
+          },
+        };
+      },
+    };
+    const supabasePath = require.resolve('../src/supabase');
+    const middlewarePath = require.resolve('../src/middlewares/autenticar');
+    const supabaseAnterior = require.cache[supabasePath];
+    const middlewareAnterior = require.cache[middlewarePath];
+    let autenticar;
+    try {
+      require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeAdmin };
+      delete require.cache[middlewarePath];
+      autenticar = require('../src/middlewares/autenticar').autenticar;
+    } finally {
+      if (supabaseAnterior) require.cache[supabasePath] = supabaseAnterior;
+      else delete require.cache[supabasePath];
+      if (middlewareAnterior) require.cache[middlewarePath] = middlewareAnterior;
+      else delete require.cache[middlewarePath];
+    }
+    const res = {
+      status(codigo) { this.statusCode = codigo; return this; },
+      json(corpo) { this.body = corpo; return this; },
+    };
+    let autorizado = false;
+    await autenticar({ headers: { authorization: `Bearer ${TOKEN}` } }, res, () => { autorizado = true; });
+    assert.equal(autorizado, false);
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, { erro: 'servidor', mensagem: 'Não foi possível validar a sessão. Tente novamente.' });
+  }
+});
+
 test('cliente Auth é construído separado e sem persistência, refresh ou sessão por URL', () => {
   const { criarClienteAuthIsolado } = require('../src/supabase-auth');
   const opcoes = [];

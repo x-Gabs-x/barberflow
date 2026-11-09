@@ -41,8 +41,8 @@ async function autenticar(req, res, next) {
       escote_percentual: vinculo.escote_percentual,
     };
     next();
-  } catch (e) {
-    res.status(500).json({ erro: 'servidor', mensagem: e.message });
+  } catch {
+    res.status(500).json({ erro: 'servidor', mensagem: 'Não foi possível validar a sessão. Tente novamente.' });
   }
 }
 function exigirPerfil(...permitidos) {
