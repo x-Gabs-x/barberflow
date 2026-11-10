@@ -1,8 +1,8 @@
 const crypto = require('node:crypto');
 const supabase = require('../supabase');
 
-const FUSO_PADRAO = process.env.BARBERFLOW_FUSO || 'America/Fortaleza';
-const OFFSET_PADRAO = process.env.BARBERFLOW_OFFSET || '-03:00';
+const FUSO_PADRAO = 'America/Sao_Paulo';
+const OFFSET_PADRAO = '-03:00';
 const campos = 'id,estabelecimento_id,barbeiro_id,cliente_id,inicio,fim,observacoes,forma_pagamento,nsu,escote_percentual,valor_total,valor_barbeiro,valor_barbearia,status,justificativa_rejeicao,barbeiro:usuario!atendimento_barbeiro_id_fkey(id,nome_completo),cliente:cliente!atendimento_cliente_id_fkey(id,nome_completo,cpf),servicos:servico_atendimento(id,servico_id,nome,preco),comprovantes:comprovante(id,caminho,criado_em)';
 
 class FalhaParte3 extends Error {
@@ -39,15 +39,13 @@ function conferirBanco(error) {
   if (error.code === '23503') throw falha(400, 'referencia_invalida', 'Cliente ou serviço inválido.');
   if (error.code === '23514') throw falha(400, 'dados_invalidos', 'Confira os horários e informações do atendimento.');
   if (error.code === 'PGRST202' || error.code === '42883') {
-    throw falha(503, 'migracao_pendente', 'A atualização SQL da Parte 3 ainda não foi aplicada no Supabase.');
+    throw falha(503, 'migracao_pendente', 'A atualização SQL da API ainda não foi aplicada no Supabase.');
   }
   console.error('Parte 3 / Supabase:', error);
   throw falha(500, 'erro_banco', 'Não foi possível concluir a operação no banco de dados.');
 }
 function dataLocalAgora() {
-  const partes = new Intl.DateTimeFormat('en-US', { timeZone: FUSO_PADRAO, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
-  const v = (chave) => partes.find((p) => p.type === chave)?.value;
-  return `${v('year')}-${v('month')}-${v('day')}`;
+  return new Date().toLocaleDateString('sv-SE', { timeZone: FUSO_PADRAO });
 }
 function periodoDoDia(dia) {
   const proximo = new Date(`${dia}T12:00:00Z`);

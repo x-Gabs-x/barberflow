@@ -5,6 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import Botao from './Botao';
 import Card from './Card';
 import Campo from './Campo';
+import { ErroApi, errosPorCampo } from '../api/cliente';
 import { Atendimento, dataLocal, diaPorExtenso, dinheiro, horaLocal, mensagemErro, mudarDia, statusNome } from '../api/parte3';
 import { CorrecaoRecepcao, recepcaoApi } from '../api/validacao';
 import { calcularIndicadoresRecepcao } from '../api/indicadoresRecepcao';
@@ -43,6 +44,7 @@ export default function RecepcaoAtendimentos() {
   const [executando, setExecutando] = useState(false);
   const [versao, setVersao] = useState(0);
   const [erro, setErro] = useState('');
+  const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState('');
 
   useFocusEffect(useCallback(() => {
@@ -65,6 +67,7 @@ export default function RecepcaoAtendimentos() {
     setRejeitando(false);
     setJustificativa('');
     setArquivo(null);
+    setErrosCampo({});
   }, [selecionado]);
 
   const { pendentes, prontos, validados, rejeitados, valorPronto, totalValidado } = calcularIndicadoresRecepcao(lista);
@@ -80,13 +83,17 @@ export default function RecepcaoAtendimentos() {
   async function executar(acao: 'validar' | 'rejeitar' | 'corrigir') {
     if (!atual || executando) return;
     if (acao === 'validar' && !atual.comprovante_anexado) {
-      setErro('Sem comprovante não é possível validar. Utilize Corrigir para anexar o arquivo.'); return;
+      setErro('Sem comprovante não é possível validar. Utilize Corrigir para anexar o arquivo.');
+      setErrosCampo({ comprovante: 'Anexe o comprovante antes de validar.' });
+      return;
     }
     if (acao === 'rejeitar' && !justificativa.trim()) {
-      setErro('Informe a justificativa da rejeição.'); return;
+      setErro('');
+      setErrosCampo({ justificativa: 'Informe a justificativa da rejeição.' });
+      return;
     }
     setExecutando(true);
-    setErro(''); setAviso('');
+    setErro(''); setErrosCampo({}); setAviso('');
     try {
       const atualizado = acao === 'validar' ? await recepcaoApi.validar(atual.id)
         : acao === 'rejeitar' ? await recepcaoApi.rejeitar(atual.id, justificativa.trim())
@@ -100,7 +107,10 @@ export default function RecepcaoAtendimentos() {
         : acao === 'rejeitar' ? 'Atendimento rejeitado.' : 'Correções salvas com sucesso.');
       setSelecionado(null);
       setVersao((v) => v + 1);
-    } catch (e) { setErro(mensagemErro(e)); }
+    } catch (e) {
+      setErro(mensagemErro(e));
+      if (e instanceof ErroApi) setErrosCampo(errosPorCampo(e));
+    }
     finally { setExecutando(false); }
   }
 
@@ -215,10 +225,11 @@ export default function RecepcaoAtendimentos() {
                     <Card>
                       <Text style={estilos.nome}>Corrigir informações</Text>
                       <Text style={estilos.suave}>A correção não altera os serviços nem o valor já registrado.</Text>
-                      <Campo rotulo="Observações" valor={observacoes} onChangeText={setObservacoes} placeholder="Observações do atendimento" />
+                      <Campo rotulo="Observações" valor={observacoes} onChangeText={(valor) => { setObservacoes(valor); setErrosCampo((atuais) => ({ ...atuais, observacoes: '' })); }} placeholder="Observações do atendimento" erro={errosCampo.observacoes} />
                       <Text style={estilos.rotulo}>Forma de pagamento</Text>
-                      <View style={estilos.filtros}>{formas.map((f) => <Pressable key={f.id} style={[estilos.pilula, pagamento === f.id && estilos.pilulaAtiva]} onPress={() => setPagamento(f.id)}><Text style={[estilos.pilulaTexto, pagamento === f.id && estilos.pilulaTextoAtivo]}>{f.texto}</Text></Pressable>)}</View>
-                      {pagamento !== 'dinheiro' ? <Campo rotulo="NSU / ID da transação" valor={nsu} onChangeText={setNsu} placeholder="Opcional" /> : null}
+                      <View style={estilos.filtros}>{formas.map((f) => <Pressable key={f.id} style={[estilos.pilula, pagamento === f.id && estilos.pilulaAtiva]} onPress={() => { setPagamento(f.id); setErrosCampo((atuais) => ({ ...atuais, forma_pagamento: '' })); }}><Text style={[estilos.pilulaTexto, pagamento === f.id && estilos.pilulaTextoAtivo]}>{f.texto}</Text></Pressable>)}</View>
+                      {errosCampo.forma_pagamento ? <Text style={estilos.erroCampo}>{errosCampo.forma_pagamento}</Text> : null}
+                      {pagamento !== 'dinheiro' ? <Campo rotulo="NSU / ID da transação" valor={nsu} onChangeText={(valor) => { setNsu(valor); setErrosCampo((atuais) => ({ ...atuais, nsu: '' })); }} placeholder="Opcional" erro={errosCampo.nsu} /> : null}
                       <Text style={estilos.rotulo}>Comprovante de pagamento</Text>
                       <Text style={estilos.suave}>Envie um JPG, PNG ou PDF de até 6 MB, inclusive quando o barbeiro não tiver anexado o arquivo.</Text>
                       <Botao titulo="Selecionar comprovante" variante="secundario" desabilitado={executando} onPress={escolherArquivo} />
@@ -231,7 +242,7 @@ export default function RecepcaoAtendimentos() {
                   {rejeitando ? (
                     <Card>
                       <Text style={estilos.nome}>Justificativa da rejeição</Text>
-                      <Campo rotulo="Motivo" valor={justificativa} onChangeText={setJustificativa} placeholder="Explique o motivo da rejeição" />
+                      <Campo rotulo="Motivo" valor={justificativa} onChangeText={(valor) => { setJustificativa(valor); setErrosCampo((atuais) => ({ ...atuais, justificativa: '' })); }} placeholder="Explique o motivo da rejeição" erro={errosCampo.justificativa} />
                       <Botao titulo={executando ? 'Rejeitando…' : 'Confirmar rejeição'} variante="perigo" desabilitado={executando || !justificativa.trim() || justificativa.length > 300} onPress={() => executar('rejeitar')} />
                       <Botao titulo="Cancelar rejeição" variante="secundario" onPress={() => setRejeitando(false)} />
                     </Card>
@@ -289,6 +300,7 @@ const estilos = StyleSheet.create({
   validado: { backgroundColor: cores.okFundo, color: cores.ok },
   ok: { color: cores.ok, fontSize: 13, fontWeight: '700' },
   falta: { color: cores.erro, fontSize: 13, fontWeight: '700' },
+  erroCampo: { color: cores.erro, fontSize: 13 },
   detalhes: { borderTopWidth: 1, borderTopColor: cores.borda, marginTop: 6, paddingTop: 16, gap: 12 },
   divisoria: { borderTopWidth: 1, borderTopColor: cores.borda },
   acoes: { gap: 10 },

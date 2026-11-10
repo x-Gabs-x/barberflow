@@ -34,6 +34,7 @@ async function executar(usuario, id, acao, dados = {}) {
       BF_STATUS_INVALIDO: [409, 'status_invalido', 'O atendimento foi alterado e não pode mais receber esta ação.'],
       BF_COMPROVANTE_OBRIGATORIO: [409, 'comprovante_obrigatorio', 'É necessário anexar um comprovante antes de validar.'],
       BF_JUSTIFICATIVA_INVALIDA: [400, 'justificativa_invalida', 'Informe uma justificativa com até 300 caracteres.'],
+      BF_PAGAMENTO_INVALIDO: [400, 'pagamento_invalido', 'Forma de pagamento inválida.'],
     };
     for (const [chave, [status, codigo, mensagem]] of Object.entries(conhecidos)) {
       if (m.includes(chave)) throw parte3.falha(status, codigo, mensagem);

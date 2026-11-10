@@ -59,9 +59,7 @@ export function horaLocal(data: string) {
   return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }).format(new Date(data));
 }
 export function dataLocal(data: Date = new Date()) {
-  const p = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Fortaleza' }).formatToParts(data);
-  const get = (chave: string) => p.find((item) => item.type === chave)?.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
+  return data.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 }
 export function mudarDia(dia: string, deslocamento: number) {
   const valor = new Date(`${dia}T12:00:00Z`);

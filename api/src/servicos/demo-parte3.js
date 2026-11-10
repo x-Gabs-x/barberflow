@@ -18,7 +18,7 @@ function obter(id, req) {
 function listar(dia = dataLocalAgora(), req) {
   return clonar(atendimentos.filter((a) => {
     if (req?.usuario.perfil === 'parceiro' && a.barbeiro.id !== identificador(req)) return false;
-    const dataDia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(a.inicio));
+    const dataDia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(a.inicio));
     return dataDia === dia;
   }).sort((a, b) => a.inicio.localeCompare(b.inicio)));
 }
@@ -109,4 +109,9 @@ function recepcaoEditar(req, id, acao, dados) {
   }
   return clonar(a);
 }
-module.exports = { recepcaoEditar, ativo, listar, emAndamento: (req) => clonar(atendimentos.find((a) => a.status === 'em_andamento' && (!req || a.barbeiro.id === identificador(req))) || null), iniciar, salvar, obter: (req, id) => clonar(obter(id, req)), comprovante, listarClientes, cadastrarCliente };
+function definirStatus(id, status) {
+  const a = obter(id);
+  a.status = status;
+  return clonar(a);
+}
+module.exports = { recepcaoEditar, ativo, listar, definirStatus, emAndamento: (req) => clonar(atendimentos.find((a) => a.status === 'em_andamento' && (!req || a.barbeiro.id === identificador(req))) || null), iniciar, salvar, obter: (req, id) => clonar(obter(id, req)), comprovante, listarClientes, cadastrarCliente };
