@@ -9,22 +9,22 @@ const atendimento = {
   observacoes: 'Barba na navalha',
   forma_pagamento: 'pix',
   comprovante_url: 'https://exemplo.com/comprovante.jpg',
-  escote_percentual: 60,
-  valor_barbeiro: 18.0,
-  valor_barbearia: 12.0,
+  escote_percentual: 40,
+  valor_barbeiro: 12.0,
+  valor_barbearia: 18.0,
   status: 'registrado',
 };
 
 const equipe = [
   { id: 'v1', usuario: { id: 'u1', nome_completo: 'Dono de Teste' }, perfil: 'dono', escote_percentual: 70, status: 'ativo' },
-  { id: 'v2', usuario: { id: 'u7', nome_completo: 'Rafael Souza' }, perfil: 'parceiro', escote_percentual: 60, status: 'ativo' },
-  { id: 'v3', usuario: { id: 'u8', nome_completo: 'Diego Lima' }, perfil: 'parceiro', escote_percentual: null, status: 'aguardando' },
+  { id: 'v2', usuario: { id: 'u7', nome_completo: 'Rafael Souza' }, perfil: 'parceiro', escote_percentual: 40, status: 'ativo' },
+  { id: 'v3', usuario: { id: 'u8', nome_completo: 'Diego Lima' }, perfil: 'parceiro', escote_percentual: 40, status: 'aguardando' },
 ];
 
 const servicos = [
-  { id: 's1', nome: 'Corte', preco: 40.0, ativo: true },
-  { id: 's2', nome: 'Barba', preco: 30.0, ativo: true },
-  { id: 's3', nome: 'Corte + barba', preco: 65.0, ativo: true },
+  { id: 's1', nome: 'Corte', preco: 30.0, ativo: true },
+  { id: 's2', nome: 'Barba', preco: 20.0, ativo: true },
+  { id: 's3', nome: 'Corte + barba', preco: 40.0, ativo: true },
 ];
 
 const barbearia = {

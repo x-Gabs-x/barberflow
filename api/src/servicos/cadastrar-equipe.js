@@ -107,6 +107,7 @@ function criarCadastrarEquipe(supabase, registrarErro = (evento) => console.erro
         estabelecimento_id: estabelecimentoId,
         perfil,
         status: 'aguardando',
+        ...(perfil === 'parceiro' ? { escote_percentual: 40 } : {}),
       });
       if (vinculo.error) {
         vinculoPodeTerSidoCriado = !REJEICOES_DE_INSERCAO.has(vinculo.error.code);

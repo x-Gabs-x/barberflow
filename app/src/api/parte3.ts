@@ -46,7 +46,7 @@ export const parte3Api = {
   atendimento: (id: string) => api.get<Atendimento>(`/atendimentos/${encodeURIComponent(id)}`),
   iniciar: () => api.post<Atendimento>('/atendimentos/iniciar', {}),
   salvar: (id: string, dados: EditarAtendimento) => api.patch<Atendimento>(`/atendimentos/${encodeURIComponent(id)}`, dados),
-  encerrar: (id: string) => api.post<Atendimento>(`/atendimentos/${encodeURIComponent(id)}/encerrar`, {}),
+  encerrar: (id: string, dados: EditarAtendimento) => api.post<Atendimento>(`/atendimentos/${encodeURIComponent(id)}/encerrar`, dados),
   servicos: () => api.get<Servico[]>('/servicos'),
   equipe: () => api.get<MembroEquipe[]>('/equipe'),
   buscarCliente: (cpf: string) => api.get<Cliente[]>(`/clientes?cpf=${encodeURIComponent(cpf)}`),

@@ -3,11 +3,29 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const moduloSupabase = require.resolve('../src/supabase');
 const chamadas = [];
+const registro = {
+  id: 'id-mock',
+  barbeiro_id: 'barbeiro-real',
+  barbeiro: { id: 'barbeiro-real', nome_completo: 'Barbeiro Teste' },
+  cliente: null,
+  inicio: '2026-11-09T13:00:00-03:00',
+  fim: '2026-11-09T14:00:00-03:00',
+  servicos: [],
+  comprovantes: [],
+  status: 'registrado',
+};
 const mock = {
   from: (tabela) => ({
-    select: () => ({
-      eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
-    }),
+    select: (colunas) => {
+      const consulta = {
+        eq: () => consulta,
+        maybeSingle: async () => ({
+          data: colunas === 'barbeiro_id' ? { barbeiro_id: 'barbeiro-real' } : registro,
+          error: null,
+        }),
+      };
+      return consulta;
+    },
   }),
   storage: { from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: 'https://example.invalid/signed' } }) }) },
   rpc: async (nome, dados) => { chamadas.push({ nome, dados }); return { data: 'id-mock', error: null }; },
@@ -24,11 +42,12 @@ test('demo: iniciar, buscar/cadastrar cliente, salvar, encerrar e comprovante', 
   const cliente = demo.cadastrarCliente({ cpf: '11144477735', nome_completo: 'Maria Teste' });
   assert.equal(demo.listarClientes(cliente.cpf).length, 1);
   const editado = demo.salvar(req, inicio.id, { cliente_id: cliente.id, servicos: ['s1', 's2'], forma_pagamento: 'pix' });
-  assert.equal(editado.valor_total, 70);
+  assert.equal(editado.valor_total, 50);
   const encerrado = demo.salvar(req, inicio.id, { fim: '2026-11-09T14:00:00-03:00' }, true);
   assert.equal(encerrado.status, 'registrado');
-  assert.equal(encerrado.valor_barbeiro, 42);
-  assert.equal(encerrado.valor_barbearia, 28);
+  assert.equal(encerrado.escote_percentual, 40);
+  assert.equal(encerrado.valor_barbeiro, 20);
+  assert.equal(encerrado.valor_barbearia, 30);
   assert.equal(demo.comprovante(req, inicio.id).comprovante_anexado, true);
   assert.equal(demo.listar('2026-11-09').length, 1);
   assert.throws(() => demo.salvar(req, inicio.id, { observacoes: 'tentar mudar' }), /encerrado/);
@@ -102,7 +121,21 @@ test('demo: Dono e Parceiro podem manter atendimentos independentes', () => {
   assert.equal(demo.emAndamento(dono).id, idDono);
   assert.equal(demo.emAndamento(parceiro).id, doParceiro.id);
   assert.notEqual(demo.emAndamento(dono).barbeiro.id, demo.emAndamento(parceiro).barbeiro.id);
-  assert.throws(() => demo.salvar(dono, doParceiro.id, { observacoes: 'indevido' }), /outro profissional/);
+  demo.salvar(parceiro, doParceiro.id, { cliente_id: 'c3', servicos: ['s1'], forma_pagamento: 'pix' });
+  assert.equal(demo.salvar(dono, doParceiro.id, {}, true).status, 'registrado');
   assert.equal(demo.listar('2026-11-09', parceiro).filter((a) => a.id === idDono).length, 0);
   assert.ok(demo.listar('2026-11-09', dono).some((a) => a.id === doParceiro.id));
+});
+
+test('dono encerra atendimento do barbeiro usando o profissional vinculado ao registro', async () => {
+  chamadas.length = 0;
+  const resultado = await parte3.salvar({
+    id: 'dono-id',
+    perfil: 'dono',
+    estabelecimento_id: 'barbearia-id',
+  }, 'id-mock', {}, true);
+
+  assert.equal(resultado.status, 'registrado');
+  assert.equal(chamadas[0].nome, 'bf_atendimento_salvar');
+  assert.equal(chamadas[0].dados.p_barbeiro, 'barbeiro-real');
 });

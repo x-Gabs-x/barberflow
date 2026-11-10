@@ -16,6 +16,11 @@ const formas = [
   { id: 'pix', nome: 'Pix' },
   { id: 'cartao', nome: 'Cartão' },
 ] as const;
+const servicosDemonstrativos: Servico[] = [
+  { id: 'mock-corte', nome: 'Corte', preco: 30, ativo: true },
+  { id: 'mock-barba', nome: 'Barba', preco: 20, ativo: true },
+  { id: 'mock-corte-barba', nome: 'Corte e barba', preco: 40, ativo: true },
+];
 
 export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -29,7 +34,6 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [pagamento, setPagamento] = useState<EditarAtendimento['forma_pagamento']>(null);
-  const [nsu, setNsu] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [arquivo, setArquivo] = useState<Arquivo | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -37,12 +41,12 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [demonstracao, setDemonstracao] = useState(false);
-  const [recarregar, setRecarregar] = useState(0);
 
   const bloqueado = !!atendimento && atendimento.status !== 'em_andamento';
   const idBancoValido = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   const servicosUsaveis = servicos.filter((s) => demonstracao || idBancoValido(s.id));
   const catalogoPendente = !demonstracao && servicos.some((s) => !idBancoValido(s.id));
+  const mostrarServicosDemonstrativos = !bloqueado && !servicosUsaveis.length && !demonstracao;
   const podeEditar = !!atendimento && !bloqueado;
   const valor = selecionados.reduce((total, idServico) => total + Number(servicosUsaveis.find((s) => s.id === idServico)?.preco || 0), 0);
   const agendaRota = perfil === 'dono' ? '/dono/agenda' : '/parceiro/agenda';
@@ -54,8 +58,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
     setCliente(c);
     setCpf(c?.cpf || '');
     setSelecionados(a.status === 'em_andamento' ? normalizarSelecionados(a.servicos.map((s) => s.id), a.servicos) : a.servicos.map((s) => s.id).filter(Boolean));
-    setPagamento(a.forma_pagamento);
-    setNsu(a.nsu || '');
+    setPagamento(a.forma_pagamento === 'cartao' ? null : a.forma_pagamento);
     setObservacoes(a.observacoes || '');
     setNaoEncontrado(false);
   }
@@ -78,7 +81,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
     }).catch((e) => { if (ativo) setErro(mensagemErro(e)); })
       .finally(() => { if (ativo) setCarregando(false); });
     return () => { ativo = false; };
-  }, [id, recarregar]));
+  }, [id]));
 
   async function iniciar() {
     if (salvando) return;
@@ -155,25 +158,21 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
 
   function dadosFormulario(): EditarAtendimento {
     return { cliente_id: cliente?.id || null, servicos: selecionados, observacoes,
-      forma_pagamento: pagamento || null, nsu: nsu.trim() || null };
+      forma_pagamento: pagamento || null, nsu: null };
   }
 
-  async function salvar(encerrar: boolean) {
+  async function encerrarAtendimento() {
     if (!atendimento || salvando) return;
-    if (encerrar && !cliente) return setErro('Selecione ou cadastre um cliente antes de encerrar.');
-    if (encerrar && !selecionados.length) return setErro('Selecione pelo menos um serviço.');
-    if (encerrar && !pagamento) return setErro('Selecione a forma de pagamento.');
+    if (!cliente) return setErro('Selecione ou cadastre um cliente antes de encerrar.');
+    if (!selecionados.length) return setErro('Selecione pelo menos um serviço.');
+    if (!pagamento) return setErro('Selecione a forma de pagamento.');
     setSalvando(true); setErro(''); setAviso('');
     try {
-      await parte3Api.salvar(atendimento.id, dadosFormulario());
       if (arquivo) await enviarArquivo(atendimento.id);
-      const final = encerrar ? await parte3Api.encerrar(atendimento.id) : await parte3Api.atendimento(atendimento.id);
-      preencher(final);
-      setAviso(encerrar ? 'Atendimento encerrado e enviado para validação da recepção.' : 'Dados do atendimento salvos.');
-      if (encerrar && !final.comprovante_anexado) setAviso('Atendimento registrado sem comprovante. A recepção não poderá validá-lo até que o comprovante seja anexado.');
+      await parte3Api.encerrar(atendimento.id, dadosFormulario());
+      router.replace({ pathname: '/', params: { atendimentoFinalizado: '1' } });
     } catch (e) {
       setErro(mensagemErro(e));
-      setRecarregar((atual) => atual + 1);
     } finally { setSalvando(false); }
   }
 
@@ -232,10 +231,11 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
                 <Botao titulo="Pesquisar CPF" variante="secundario" onPress={buscarCliente} desabilitado={salvando} />
                 {naoEncontrado ? (
                   <View style={estilos.grupo}>
-                    <Text style={estilos.rotulo}>Novo cliente</Text>
+                    <Text style={estilos.rotulo}>CPF não cadastrado</Text>
+                    <Text style={estilos.suave}>Informe o nome para cadastrar este cliente na barbearia e vinculá-lo ao atendimento.</Text>
                     <Campo rotulo="Nome completo" valor={nomeNovo} onChangeText={setNomeNovo} placeholder="Nome do cliente" />
                     <Campo rotulo="Telefone (opcional)" valor={telefoneNovo} onChangeText={setTelefoneNovo} placeholder="(83) 99999-9999" keyboardType="phone-pad" />
-                    <Botao titulo="Cadastrar e selecionar cliente" onPress={cadastrarCliente} desabilitado={salvando} />
+                    <Botao titulo="Cadastrar cliente e vincular ao atendimento" onPress={cadastrarCliente} desabilitado={salvando} />
                   </View>
                 ) : null}
               </>
@@ -245,7 +245,15 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
           <Card>
             <Text style={estilos.secao}>02  ·  Serviços executados</Text>
             {!bloqueado && catalogoPendente ? <Text style={estilos.avisoTexto}>A rota de serviços ainda retornou identificadores de exemplo. A integração com os serviços reais do Zac está pendente; esses exemplos não podem ser utilizados para gravar atendimentos reais.</Text> : null}
-            {!bloqueado && !servicosUsaveis.length ? <Text style={estilos.suave}>Nenhum serviço real disponível. A lista depende do cadastro de serviços da Parte 5 (Zac).</Text> : null}
+            {mostrarServicosDemonstrativos ? <Text style={estilos.avisoTexto}>Prévia demonstrativa de preços. Cadastre os serviços no catálogo da barbearia para selecioná-los e salvar atendimentos reais.</Text> : null}
+            {!bloqueado && !servicosUsaveis.length && !mostrarServicosDemonstrativos ? <Text style={estilos.suave}>Nenhum serviço real disponível. A lista depende do cadastro de serviços da Parte 5 (Zac).</Text> : null}
+            {mostrarServicosDemonstrativos ? servicosDemonstrativos.map((servico) => (
+              <View key={servico.id} style={estilos.opcaoServico}>
+                <View style={[estilos.checkbox, estilos.checkboxDesabilitado]} />
+                <Text style={[estilos.nome, { flex: 1 }]}>{servico.nome}</Text>
+                <Text style={estilos.valor}>{dinheiro(servico.preco)}</Text>
+              </View>
+            )) : null}
             {(bloqueado ? atendimento.servicos.map((s) => ({ ...s, ativo: true })) : servicosUsaveis.filter((s) => s.ativo || selecionados.includes(s.id))).map((s) => (
               <Pressable key={s.id} disabled={bloqueado || !s.ativo} onPress={() => trocarServico(s.id)} style={[estilos.opcaoServico, selecionados.includes(s.id) && estilos.opcaoSelecionada]}>
                 <View style={[estilos.checkbox, selecionados.includes(s.id) && estilos.checkboxMarcado]}><Text style={estilos.checkTexto}>{selecionados.includes(s.id) ? '✓' : ''}</Text></View>
@@ -261,12 +269,11 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
             <Text style={estilos.secao}>03  ·  Pagamento</Text>
             <View style={estilos.formas}>
               {formas.map((forma) => (
-                <Pressable key={forma.id} disabled={bloqueado} onPress={() => { setPagamento(forma.id); if (forma.id === 'dinheiro') setNsu(''); }} style={[estilos.forma, pagamento === forma.id && estilos.formaAtiva]}>
+                <Pressable key={forma.id} disabled={bloqueado} onPress={() => setPagamento(forma.id)} style={[estilos.forma, pagamento === forma.id && estilos.formaAtiva]}>
                   <Text style={[estilos.formaTexto, pagamento === forma.id && estilos.formaTextoAtiva]}>{forma.nome}</Text>
                 </Pressable>
               ))}
             </View>
-            {(pagamento === 'cartao' || pagamento === 'pix') && !bloqueado ? <Campo rotulo="NSU / Identificador da transação (opcional)" valor={nsu} onChangeText={setNsu} placeholder="Identificador quando disponível" /> : null}
             {bloqueado && atendimento.nsu ? <Text style={estilos.suave}>Identificador: {atendimento.nsu}</Text> : null}
             {!bloqueado ? <Campo rotulo="Observações (opcional)" valor={observacoes} onChangeText={setObservacoes} placeholder="Detalhes adicionais do atendimento" />
               : atendimento.observacoes ? <Text style={estilos.suave}>Observações: {atendimento.observacoes}</Text> : null}
@@ -298,9 +305,9 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
             </Card>
           ) : (
             <View style={estilos.acoes}>
-              <Botao titulo={salvando ? 'Salvando…' : 'Salvar rascunho'} variante="secundario" onPress={() => salvar(false)} desabilitado={salvando} />
-              <Botao titulo={salvando ? 'Finalizando…' : 'Encerrar atendimento'} onPress={() => salvar(true)} desabilitado={salvando || !cliente || !selecionados.length || !pagamento} />
+              {erro ? <Text accessibilityRole="alert" style={estilos.erro}>{erro}</Text> : null}
               <Text style={estilos.suave}>Ao encerrar, o atendimento será enviado para a recepção. Sem comprovante, ele poderá ser registrado, mas não validado.</Text>
+              <Botao titulo={salvando ? 'Encerrando…' : 'Encerrar atendimento'} onPress={encerrarAtendimento} desabilitado={salvando} />
             </View>
           )}
         </>
@@ -326,6 +333,7 @@ const estilos = StyleSheet.create({
   opcaoServico: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: cores.borda, borderRadius: raio.campo, padding: 14 },
   opcaoSelecionada: { borderColor: cores.dourado, backgroundColor: cores.avisoFundo },
   checkbox: { height: 23, width: 23, borderWidth: 1, borderColor: cores.borda, borderRadius: 6, backgroundColor: cores.branco, alignItems: 'center', justifyContent: 'center' },
+  checkboxDesabilitado: { backgroundColor: cores.fundo },
   checkboxMarcado: { backgroundColor: cores.dourado, borderColor: cores.dourado },
   checkTexto: { color: cores.marinho, fontWeight: '700', fontSize: 13 },
   valor: { color: cores.marinho, fontSize: 15, fontWeight: '700' },
@@ -334,6 +342,7 @@ const estilos = StyleSheet.create({
   formas: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   forma: { flex: 1, minWidth: 90, borderWidth: 1, borderColor: cores.borda, paddingVertical: 13, paddingHorizontal: 10, borderRadius: raio.campo, alignItems: 'center' },
   formaAtiva: { backgroundColor: cores.marinho, borderColor: cores.dourado },
+  faseDesabilitada: { opacity: 0.65 },
   formaTexto: { color: cores.textoSuave, fontWeight: '700' }, formaTextoAtiva: { color: cores.branco },
   linha: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   status: { backgroundColor: cores.avisoFundo, color: cores.aviso, borderRadius: 8, padding: 7, fontWeight: '600', fontSize: 12, overflow: 'hidden' },

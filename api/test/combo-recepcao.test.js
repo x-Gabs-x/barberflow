@@ -22,12 +22,12 @@ test('combo não é somado aos seus próprios componentes e aceita serviço adic
   assert.equal(validarSelecao([{ nome: 'Tosa' }, { nome: 'Banho + tosa' }]), false);
 });
 
-test('o backend recusa 135 reais e aceita o combo de 65 reais', () => {
+test('o backend recusa serviços sobrepostos e aceita o combo de 40 reais', () => {
   const a = demo.iniciar(dono, '2026-11-09T13:00:00-03:00');
   assert.throws(() => demo.salvar(dono, a.id, { servicos: ['s1', 's2', 's3'] }), (e) => e.status === 400 && e.codigo === 'servicos_sobrepostos');
   assert.equal(demo.obter(dono, a.id).valor_total, 0);
   const salvo = demo.salvar(dono, a.id, { servicos: ['s3'] });
-  assert.equal(salvo.valor_total, 65);
+  assert.equal(salvo.valor_total, 40);
 });
 
 test('recepção só valida depois de comprovante e não altera valores em correções', () => {
@@ -35,12 +35,12 @@ test('recepção só valida depois de comprovante e não altera valores em corre
   const cliente = demo.cadastrarCliente({ cpf: '93541134780', nome_completo: 'Cliente recepção' });
   demo.salvar(parceiro, a.id, { cliente_id: cliente.id, servicos: ['s3'], forma_pagamento: 'pix' });
   demo.salvar(parceiro, a.id, { fim: '2026-11-09T14:00:00-03:00' }, true);
-  assert.equal(recepcao.listar(atendente, { data: '2026-11-09' }).find((x) => x.id === a.id).valor_total, 65);
+  assert.equal(recepcao.listar(atendente, { data: '2026-11-09' }).find((x) => x.id === a.id).valor_total, 40);
   assert.throws(() => recepcao.atualizar(atendente, a.id, 'validar'), (e) => e.codigo === 'comprovante_obrigatorio');
   assert.throws(() => recepcao.atualizar(dono, a.id, 'validar'), (e) => e.status === 403);
   assert.throws(() => recepcao.atualizar(atendente, a.id, 'rejeitar', { justificativa: '' }), (e) => e.status === 400);
   const corrigido = recepcao.atualizar(atendente, a.id, 'corrigir', { observacoes: 'Pagamento confirmado', forma_pagamento: 'cartao', nsu: '1234' });
-  assert.equal(corrigido.valor_total, 65);
+  assert.equal(corrigido.valor_total, 40);
   assert.equal(corrigido.forma_pagamento, 'cartao');
   demo.comprovante(parceiro, a.id);
   const validado = recepcao.atualizar(atendente, a.id, 'validar');

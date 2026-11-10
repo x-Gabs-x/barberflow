@@ -39,6 +39,7 @@ app.use('/atendimentos', autenticar, require('./rotas/atendimentos'));
 app.use('/atendimentos', autenticar, require('./rotas/validacao'));
 app.use('/clientes', autenticar, require('./rotas/clientes'));
 app.use('/fechamento', autenticar, require('./rotas/fechamento'));
+app.use('/notificacoes', autenticar, require('./rotas/notificacoes'));
 app.use('/equipe', autenticar, require('./rotas/equipe'));
 app.use('/servicos', autenticar, require('./rotas/servicos'));
 app.use('/barbearia', autenticar, require('./rotas/barbearia'));

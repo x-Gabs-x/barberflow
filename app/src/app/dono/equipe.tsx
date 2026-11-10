@@ -65,7 +65,7 @@ export default function Equipe() {
     setEquipe(ativos);
     setPedidos(aguardando);
     const valores: Record<string, string> = {};
-    [...ativos, ...aguardando].forEach((m) => {
+    ativos.filter((m) => m.perfil === 'dono').forEach((m) => {
       valores[m.id] = m.escote_percentual === null ? '' : String(m.escote_percentual);
     });
     setEscotes(valores);
@@ -78,15 +78,10 @@ export default function Equipe() {
   }, []);
 
   async function aprovar(pedido: Membro) {
-    const precisaEscote = pedido.perfil === 'parceiro';
-    if (precisaEscote && !escoteValido(escotes[pedido.id])) {
-      return avisar('Informe o escote (0 a 100) antes de aprovar.', true);
-    }
     try {
-      const escote = precisaEscote ? Number(escotes[pedido.id]) : null;
-      await api.post(`/equipe/pedidos/${pedido.id}/aprovar`, { escote_percentual: escote });
+      await api.post(`/equipe/pedidos/${pedido.id}/aprovar`);
       setPedidos(pedidos.filter((p) => p.id !== pedido.id));
-      setEquipe([...equipe, { ...pedido, status: 'ativo', escote_percentual: escote }]);
+      setEquipe([...equipe, { ...pedido, status: 'ativo', escote_percentual: pedido.perfil === 'parceiro' ? 40 : null }]);
       avisar(`${pedido.usuario.nome_completo} entrou na equipe.`);
     } catch (e) {
       mostrarErro(e);
@@ -149,13 +144,7 @@ export default function Equipe() {
         <Card key={p.id}>
           <Cabecalho membro={p} status="aguardando" />
           {p.perfil === 'parceiro' ? (
-            <Campo
-              rotulo="Escote do barbeiro (%)"
-              valor={escotes[p.id] ?? ''}
-              onChangeText={(t) => setEscotes({ ...escotes, [p.id]: t })}
-              keyboardType="numeric"
-              placeholder="Ex.: 60"
-            />
+            <Text style={estilos.suave}>Escote definido automaticamente: 40% para o barbeiro.</Text>
           ) : null}
           <View style={estilos.linha}>
             <View style={{ flex: 1 }}>
@@ -172,12 +161,14 @@ export default function Equipe() {
       {equipe.map((m) => (
         <Card key={m.id}>
           <Cabecalho membro={m} status="ativo" />
-          {m.perfil !== 'recepcao' && m.escote_percentual !== null ? (
+          {m.perfil === 'parceiro' ? (
+            <Text style={estilos.suave}>Fica com 40% · Barbearia 60%</Text>
+          ) : m.perfil === 'dono' && m.escote_percentual !== null ? (
             <Text style={estilos.suave}>
               Fica com {m.escote_percentual}% · Barbearia {100 - m.escote_percentual}%
             </Text>
           ) : null}
-          {m.perfil !== 'recepcao' ? (
+          {m.perfil === 'dono' ? (
             <Campo
               rotulo="Escote (%)"
               valor={escotes[m.id] ?? ''}
@@ -195,7 +186,7 @@ export default function Equipe() {
                 />
               </View>
             ) : null}
-            {m.perfil !== 'recepcao' ? (
+            {m.perfil === 'dono' ? (
               <View style={{ flex: 1 }}>
                 <Botao titulo="Salvar escote" variante="secundario" onPress={() => salvarEscote(m)} />
               </View>

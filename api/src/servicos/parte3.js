@@ -118,8 +118,17 @@ async function iniciar(usuario, inicio) {
   return obterAtendimento(data, usuario);
 }
 async function salvar(usuario, id, body, encerrar = false) {
+  let atendimentoQuery = supabase.from('atendimento')
+    .select('barbeiro_id')
+    .eq('id', id)
+    .eq('estabelecimento_id', usuario.estabelecimento_id);
+  if (usuario.perfil === 'parceiro') atendimentoQuery = atendimentoQuery.eq('barbeiro_id', usuario.id);
+  const { data: atendimento, error: erroAtendimento } = await atendimentoQuery.maybeSingle();
+  conferirBanco(erroAtendimento);
+  if (!atendimento) throw falha(404, 'nao_encontrado', 'Atendimento não encontrado.');
+
   const { error } = await supabase.rpc('bf_atendimento_salvar', {
-    p_id: id, p_estabelecimento: usuario.estabelecimento_id, p_barbeiro: usuario.id,
+    p_id: id, p_estabelecimento: usuario.estabelecimento_id, p_barbeiro: atendimento.barbeiro_id,
     p_cliente: body.cliente_id ?? null,
     p_definir_cliente: Object.hasOwn(body, 'cliente_id'),
     p_servicos: body.servicos ?? null,

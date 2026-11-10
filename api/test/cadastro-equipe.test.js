@@ -104,6 +104,7 @@ for (const perfil of ['parceiro', 'recepcao']) {
     assert.equal(r.chamadas[4].payload.estabelecimento_id, ID_ESTAB);
     assert.equal(r.chamadas[4].payload.perfil, perfil);
     assert.equal(r.chamadas[4].payload.status, 'aguardando');
+    assert.equal(r.chamadas[4].payload.escote_percentual, perfil === 'parceiro' ? 40 : undefined);
   });
 }
 

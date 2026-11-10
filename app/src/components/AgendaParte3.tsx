@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import Botao from './Botao';
 import Card from './Card';
 import { cores, raio } from '../theme';
+import { NotificacaoAtendimento, notificacoesApi } from '../api/notificacoes';
 import { AgendaDia, MembroEquipe, Perfil, dataLocal, diaPorExtenso, dinheiro, horaLocal, mensagemErro, mudarDia, parte3Api, statusNome } from '../api/parte3';
 
 type Props = { perfil: Perfil };
@@ -14,6 +15,8 @@ export default function AgendaParte3({ perfil }: Props) {
   const [dia, setDia] = useState(dataLocal());
   const [agenda, setAgenda] = useState<AgendaDia | null>(null);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
+  const [notificacoes, setNotificacoes] = useState<NotificacaoAtendimento[]>([]);
+  const [erroNotificacoes, setErroNotificacoes] = useState('');
   const [filtro, setFiltro] = useState('todos');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -27,23 +30,71 @@ export default function AgendaParte3({ perfil }: Props) {
     const agendaP = parte3Api.agenda(dia);
     const equipeP = perfil === 'dono' ? parte3Api.equipe().catch(() => []) : Promise.resolve([]);
     Promise.all([agendaP, equipeP])
-      .then(([dados, membros]) => {
+      .then(async ([dados, membros]) => {
         if (!ativo) return;
         setAgenda(dados);
         setEquipe(membros);
+        if (perfil === 'dono' && !dados.demonstracao) {
+          try {
+            setNotificacoes(await notificacoesApi.listar());
+            setErroNotificacoes('');
+          } catch (e) {
+            setErroNotificacoes(mensagemErro(e));
+          }
+        } else {
+          setNotificacoes([]);
+          setErroNotificacoes('');
+        }
       })
       .catch((e) => { if (ativo) setErro(mensagemErro(e)); })
       .finally(() => { if (ativo) setCarregando(false); });
     return () => { ativo = false; };
   }, [dia, perfil, versao]));
 
+  useFocusEffect(useCallback(() => {
+    if (perfil !== 'dono' || agenda?.demonstracao) return undefined;
+    let ativo = true;
+    const atualizar = async () => {
+      try {
+        const dados = await notificacoesApi.listar();
+        if (ativo) {
+          setNotificacoes(dados);
+          setErroNotificacoes('');
+        }
+      } catch (e) {
+        if (ativo) setErroNotificacoes(mensagemErro(e));
+      }
+    };
+    const intervalo = setInterval(atualizar, 30000);
+    return () => {
+      ativo = false;
+      clearInterval(intervalo);
+    };
+  }, [agenda?.demonstracao, perfil]));
+
   const todos = agenda?.atendimentos || [];
   const filtrados = filtro === 'todos' ? todos : todos.filter((a) => a.barbeiro.id === filtro);
   const equipeComAtendimentos = equipe.filter((m) => todos.some((a) => a.barbeiro.id === m.usuario.id));
-  const registrados = filtrados.filter((a) => !['em_andamento', 'rejeitado'].includes(a.status));
-  const total = registrados.reduce((ac, a) => ac + a.valor_total, 0);
-  const emAndamento = agenda?.em_andamento;
+  const encerrados = filtrados.filter((a) => !['em_andamento', 'rejeitado'].includes(a.status));
+  const total = encerrados.reduce((ac, a) => ac + a.valor_total, 0);
+  const atendimentoEmAndamentoNaLista = todos.find((a) => a.id === agenda?.em_andamento?.id);
+  const emAndamento = atendimentoEmAndamentoNaLista
+    ? atendimentoEmAndamentoNaLista.status === 'em_andamento' ? atendimentoEmAndamentoNaLista : null
+    : agenda?.em_andamento?.status === 'em_andamento' ? agenda.em_andamento : null;
   const abrir = (id?: string) => router.push({ pathname: perfil === 'dono' ? '/atendimento-dono' : '/parceiro/novo', params: id ? { id } : {} });
+
+  async function abrirNotificacao(notificacao: NotificacaoAtendimento) {
+    if (!notificacao.lida_em) {
+      try {
+        const atualizada = await notificacoesApi.marcarLida(notificacao.id);
+        setNotificacoes((anteriores) => anteriores.map((item) => item.id === atualizada.id ? { ...item, lida_em: atualizada.lida_em } : item));
+        setErroNotificacoes('');
+      } catch (e) {
+        setErroNotificacoes(mensagemErro(e));
+      }
+    }
+    abrir(notificacao.atendimento_id);
+  }
 
   return (
     <ScrollView style={estilos.fundo} contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
@@ -60,6 +111,25 @@ export default function AgendaParte3({ perfil }: Props) {
 
       {agenda?.demonstracao ? <Text style={estilos.demo}>AMBIENTE DE TESTE · Os atendimentos ficam somente na memória e não são gravados no Supabase.</Text> : null}
       {erro ? <Text accessibilityRole="alert" style={estilos.erro}>{erro}</Text> : null}
+      {perfil === 'dono' && !agenda?.demonstracao ? (
+        <Card>
+          <View style={estilos.linha}>
+            <Text style={estilos.secao}>Notificações de encerramento</Text>
+            <Text style={estilos.contadorNotificacoes}>{notificacoes.filter((n) => !n.lida_em).length} novas</Text>
+          </View>
+          {erroNotificacoes ? <Text accessibilityRole="alert" style={estilos.erro}>{erroNotificacoes}</Text> : null}
+          {!erroNotificacoes && !notificacoes.length ? <Text style={estilos.suave}>Nenhum atendimento encerrado recentemente.</Text> : null}
+          {notificacoes.map((notificacao) => (
+            <View key={notificacao.id} style={[estilos.notificacao, !notificacao.lida_em && estilos.notificacaoNova]}>
+              <Text style={estilos.notificacaoTitulo}>{notificacao.titulo}{!notificacao.lida_em ? ' · Nova' : ''}</Text>
+              <Text style={estilos.suave}>{notificacao.mensagem}</Text>
+              <Pressable accessibilityRole="button" onPress={() => abrirNotificacao(notificacao)}>
+                <Text style={estilos.link}>Ver atendimento →</Text>
+              </Pressable>
+            </View>
+          ))}
+        </Card>
+      ) : null}
       <Card>
         <View style={estilos.linha}>
           <Pressable accessibilityRole="button" accessibilityLabel="Dia anterior" style={estilos.mudarDia} onPress={() => setDia(mudarDia(dia, -1))}><Text style={estilos.botaoSeta}>‹</Text></Pressable>
@@ -90,7 +160,7 @@ export default function AgendaParte3({ perfil }: Props) {
 
       <View style={[estilos.resumo, largura && estilos.resumoLargo]}>
         <View style={estilos.metricas}><Text style={estilos.metricasRotulo}>ATENDIMENTOS</Text><Text style={estilos.metricasNumero}>{filtrados.length}</Text></View>
-        <View style={estilos.metricas}><Text style={estilos.metricasRotulo}>FINALIZADOS</Text><Text style={estilos.metricasNumero}>{registrados.length}</Text></View>
+        <View style={estilos.metricas}><Text style={estilos.metricasRotulo}>CORTES ENCERRADOS</Text><Text style={estilos.metricasNumero}>{encerrados.length}</Text></View>
         <View style={estilos.metricas}><Text style={estilos.metricasRotulo}>TOTAL REGISTRADO</Text><Text style={estilos.metricasNumero}>{dinheiro(total)}</Text></View>
       </View>
 
@@ -167,4 +237,8 @@ const estilos = StyleSheet.create({
   rodape: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderTopColor: cores.borda, borderTopWidth: 1, paddingTop: 10 },
   erro: { color: cores.erro, backgroundColor: cores.erroFundo, padding: 12, borderRadius: raio.campo },
   demo: { color: cores.aviso, backgroundColor: cores.avisoFundo, padding: 12, borderRadius: raio.campo },
+  contadorNotificacoes: { color: cores.dourado, fontWeight: '700', fontSize: 13 },
+  notificacao: { borderTopColor: cores.borda, borderTopWidth: 1, paddingTop: 12, marginTop: 12, gap: 7 },
+  notificacaoNova: { borderLeftWidth: 3, borderLeftColor: cores.dourado, paddingLeft: 10 },
+  notificacaoTitulo: { color: cores.marinho, fontSize: 15, fontWeight: '700' },
 });

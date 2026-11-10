@@ -61,12 +61,11 @@ test('demo: preço e desativação do serviço ficam salvos', async () => {
   await assert.rejects(parte5.editarServico(demo, 'nao-existe', { preco: 1 }), (e) => e.status === 404);
 });
 
-test('demo: aprovar parceiro exige escote e move o pedido para a equipe', async () => {
-  await assert.rejects(parte5.aprovarPedido(demo, 'v3', null), (e) => e.codigo === 'escote_obrigatorio');
-  await parte5.aprovarPedido(demo, 'v3', 55);
+test('demo: parceiro recebe escote fixo de 40% ao ser aprovado', async () => {
+  await parte5.aprovarPedido(demo, 'v3');
   assert.equal((await parte5.listarEquipe(demo, 'aguardando')).length, 0);
   const diego = (await parte5.listarEquipe(demo, 'ativo')).find((m) => m.id === 'v3');
-  assert.equal(diego.escote_percentual, 55);
+  assert.equal(diego.escote_percentual, 40);
 });
 
 test('demo: escote do dono pode mudar, mas o dono não pode ser removido', async () => {
@@ -120,14 +119,13 @@ test('banco: editar serviço de outra barbearia responde 404', async () => {
 });
 
 test('banco: aprovar parceiro ativa o vínculo e registra o histórico do escote', async () => {
-  preparar(vinculo('parceiro', 'aguardando'), ok, { data: null, error: null });
-  const r = await parte5.aprovarPedido(dono, 'v9', 60);
-  assert.deepEqual(r, { ok: true, escote_percentual: 60 });
+  preparar(vinculo('parceiro', 'aguardando', 40), ok);
+  const r = await parte5.aprovarPedido(dono, 'v9');
+  assert.deepEqual(r, { ok: true, escote_percentual: 40 });
   const [busca, atualizacao, historico] = consultas;
   assert.deepEqual(busca.filtros, { id: 'v9', estabelecimento_id: 'b-minha', status: 'aguardando' });
-  assert.deepEqual(atualizacao.dados, { status: 'ativo', escote_percentual: 60 });
-  assert.equal(historico.tabela, 'historico_escote');
-  assert.deepEqual(historico.dados, { vinculo_id: 'v9', percentual_anterior: null, percentual_novo: 60, alterado_por: 'u-dono' });
+  assert.deepEqual(atualizacao.dados, { status: 'ativo', escote_percentual: 40 });
+  assert.equal(consultas.length, 2);
 });
 
 test('banco: recepção é aprovada sem escote e sem histórico', async () => {
@@ -145,10 +143,26 @@ test('banco: recusar marca o pedido como recusado', async () => {
 });
 
 test('banco: mudar escote guarda o valor anterior no histórico', async () => {
-  preparar(vinculo('parceiro', 'ativo', 60), ok, { data: null, error: null });
+  preparar(vinculo('dono', 'ativo', 70), ok, { data: null, error: null });
   const r = await parte5.alterarEscote(dono, 'v9', 65);
-  assert.deepEqual(r, { ok: true, percentual_anterior: 60, percentual_novo: 65 });
-  assert.equal(consultas[2].dados.percentual_anterior, 60);
+  assert.deepEqual(r, { ok: true, percentual_anterior: 70, percentual_novo: 65 });
+  assert.equal(consultas[2].dados.percentual_anterior, 70);
+});
+
+test('banco: escote de parceiro não pode ser alterado dos 40%', async () => {
+  preparar(vinculo('parceiro', 'ativo', 40));
+  await assert.rejects(parte5.alterarEscote(dono, 'v9', 60), (e) => e.codigo === 'escote_fixo');
+  assert.equal(consultas.length, 1);
+});
+
+test('migração ajusta vínculos existentes e fixa parceiros em 40%', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const sql = fs.readFileSync(path.join(__dirname, '../sql/20261110_escote_parceiros_40.sql'), 'utf8');
+  assert.match(sql, /update public\.vinculo[\s\S]*set escote_percentual = 40[\s\S]*perfil = 'parceiro'/i);
+  assert.match(sql, /before insert or update on public\.vinculo/i);
+  assert.match(sql, /new\.escote_percentual := 40/i);
+  assert.match(sql, /vinculo_parceiro_escote_40[\s\S]*is not distinct from 40/i);
 });
 
 test('banco: recepção não tem escote', async () => {

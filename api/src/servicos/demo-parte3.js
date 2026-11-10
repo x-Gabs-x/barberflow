@@ -34,7 +34,8 @@ function iniciar(req, inicio) {
 }
 function salvar(req, id, body, encerrar = false) {
   const a = obter(id, req);
-  if (a.barbeiro.id !== identificador(req)) throw falha(403, 'sem_permissao', 'Atendimento pertence a outro profissional.');
+  if (a.barbeiro.id !== identificador(req) && req.usuario.perfil !== 'dono')
+    throw falha(403, 'sem_permissao', 'Atendimento pertence a outro profissional.');
   if (a.status !== 'em_andamento') throw falha(409, 'atendimento_fechado', 'Atendimento já encerrado.');
   if (body.cliente_id !== undefined) {
     const cliente = body.cliente_id === null ? null : clientes.find((c) => c.id === body.cliente_id);
@@ -61,7 +62,7 @@ function salvar(req, id, body, encerrar = false) {
     if (Date.parse(fim) <= Date.parse(a.inicio)) throw falha(400, 'fim_invalido', 'O fim deve ser posterior ao início.');
     a.fim = fim;
     a.status = 'registrado';
-    a.escote_percentual = req.usuario.perfil === 'dono' ? 70 : 60;
+    a.escote_percentual = req.usuario.perfil === 'dono' ? 70 : 40;
     a.valor_barbeiro = Math.round(a.valor_total * a.escote_percentual) / 100;
     a.valor_barbearia = Math.round((a.valor_total - a.valor_barbeiro) * 100) / 100;
   }

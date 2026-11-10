@@ -113,14 +113,13 @@ async function registrarEscote(usuario, vinculoId, anterior, novo) {
   conferirBanco(error);
 }
 
-async function aprovarPedido(usuario, id, escote) {
+async function aprovarPedido(usuario, id) {
   const pedido = await buscarVinculo(usuario, id, 'aguardando');
-  if (pedido.perfil === 'parceiro' && escote === null) {
-    throw falha(400, 'escote_obrigatorio', 'Informe o escote do parceiro para aprovar.');
-  }
-  const escoteFinal = pedido.perfil === 'parceiro' ? escote : null;
+  const escoteFinal = pedido.perfil === 'parceiro' ? 40 : null;
   await atualizarVinculo(usuario, id, 'aguardando', { status: 'ativo', escote_percentual: escoteFinal });
-  if (escoteFinal !== null) await registrarEscote(usuario, id, null, escoteFinal);
+  if (escoteFinal !== null && pedido.escote_percentual !== escoteFinal) {
+    await registrarEscote(usuario, id, pedido.escote_percentual, escoteFinal);
+  }
   return { ok: true, escote_percentual: escoteFinal };
 }
 
@@ -134,6 +133,9 @@ async function alterarEscote(usuario, id, percentual) {
   const membro = await buscarVinculo(usuario, id, 'ativo');
   if (membro.perfil === 'recepcao') {
     throw falha(400, 'sem_escote', 'A recepção não recebe escote.');
+  }
+  if (membro.perfil === 'parceiro') {
+    throw falha(400, 'escote_fixo', 'O escote dos barbeiros é fixo em 40%.');
   }
   const anterior = membro.escote_percentual;
   await atualizarVinculo(usuario, id, 'ativo', { escote_percentual: percentual });

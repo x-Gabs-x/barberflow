@@ -77,9 +77,9 @@ test('modo de teste confirma os valores e devolve os atendimentos à recepção'
   demoValidacao.atualizar(recepcao, atendimento.id, 'validar');
 
   const antes = await fechamento.resumo(dono, data);
-  assert.equal(antes.total, 65);
-  assert.equal(antes.por_barbeiro[0].valor_barbeiro, 39);
-  assert.equal(antes.por_forma_pagamento.pix, 65);
+  assert.equal(antes.total, 40);
+  assert.equal(antes.por_barbeiro[0].valor_barbeiro, 16);
+  assert.equal(antes.por_forma_pagamento.pix, 40);
 
   await fechamento.confirmar(dono, data);
   assert.equal(demoAtendimentos.obter(parceiro, atendimento.id).status, 'validado_dono');
