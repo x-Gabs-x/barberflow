@@ -1,6 +1,6 @@
 const express = require('express');
 const { exigirPerfil } = require('../middlewares/autenticar');
-const { barbearia } = require('../dados-teste');
+const parte5 = require('../servicos/parte5');
 const { z, texto, telefone, hora, validar } = require('../validar-dados');
 const router = express.Router();
 
@@ -25,8 +25,10 @@ const edicaoBarbearia = z
 
 router.use(exigirPerfil('dono'));
 
-router.get('/', (req, res) => res.json(barbearia));
-router.patch('/', validar(edicaoBarbearia), (req, res) => res.json({ ...barbearia, ...req.body }));
-router.post('/novo-id', (req, res) => res.json({ codigo: 'BRB-NOVO-0000' }));
+const { responder } = parte5;
+
+router.get('/', responder((req) => parte5.obterBarbearia(req.usuario)));
+router.patch('/', validar(edicaoBarbearia), responder((req) => parte5.editarBarbearia(req.usuario, req.body)));
+router.post('/novo-id', responder((req) => parte5.gerarNovoCodigo(req.usuario)));
 
 module.exports = router;
