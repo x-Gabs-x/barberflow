@@ -1,38 +1,52 @@
 # BarberFlow
 
-Sistema de gestão para barbearias.
+Aplicação para apoiar a gestão de barbearias, com recursos para organizar atendimentos e rotinas administrativas.
 
-## O problema
+> Projeto acadêmico em desenvolvimento.
 
-Barbeiros parceiros atendem clientes e o controle de pagamentos e comissões costuma ser manual. O BarberFlow organiza esse fluxo:
+## Componentes
 
-1. O **barbeiro** registra cada atendimento (cliente, serviços, valor, forma de pagamento e comprovante).
-2. A **recepção** confere e valida os atendimentos do dia. Sem comprovante, não valida.
-3. O **dono** valida o fechamento do dia e vê o repasse de cada barbeiro (escote) e o valor da barbearia.
+- `app/`: aplicativo web e mobile desenvolvido com Expo, React Native e TypeScript.
+- `api/`: serviço backend desenvolvido com Node.js e Express.
+- Persistência e autenticação: Supabase.
 
-## Perfis
+## Requisitos
 
-- **Dono:** cria a barbearia (pode ter filiais), aprova a equipe, define os escotes e os serviços e confirma o fechamento.
-- **Parceiro (barbeiro):** registra os atendimentos e envia comprovantes.
-- **Recepção:** valida os atendimentos do dia.
+- Node.js LTS e npm.
 
-## Tecnologias
+## Executar localmente
 
-- App: React Native com Expo (celular e web)
-- API: Node.js com Express
-- Banco, login e arquivos: Supabase (PostgreSQL, Auth e Storage)
+### API
 
-## Estrutura
+```powershell
+cd api
+npm install
+```
 
-- `api/`: API com as regras de negócio
-- `app/`: aplicativo (em construção)
+Crie `api/.env` localmente e configure as credenciais do Supabase (`SUPABASE_URL` e `SUPABASE_SECRET_KEY`). Não compartilhe nem adicione esse arquivo ao Git.
 
-## Como rodar a API
+Inicie o serviço:
 
-1. Entre em `api/` e instale as dependências: `npm install`
-2. Crie o arquivo `api/.env` com `SUPABASE_URL`, `SUPABASE_SECRET_KEY` e `PORT=3000`
-3. Rode `npm run dev` e abra http://localhost:3000/saude
+```powershell
+npm run dev
+```
 
-## Equipe
+A API usa a porta `3000` por padrão. Para verificar a conexão local, acesse `http://localhost:3000/saude`.
 
-Gabriel, Georgio, Lucas Vinícius, Arruda e Zac.
+### Aplicativo
+
+Em outro terminal:
+
+```powershell
+cd app
+npm install
+npm run web
+```
+
+Para apontar o aplicativo a uma API em outro endereço, configure `EXPO_PUBLIC_API_URL` no ambiente local.
+
+## Segurança
+
+- Mantenha credenciais, tokens e dados de acesso fora do repositório.
+- Não inclua arquivos `.env` nem valores secretos em documentação, código ou capturas de tela.
+- Se uma credencial for exposta, solicite sua revogação e substituição ao responsável pelo serviço.

@@ -1,0 +1,28 @@
+const express = require('express');
+const { exigirPerfil } = require('../middlewares/autenticar');
+const { idRota, validar, z } = require('../validar-dados');
+const parte3 = require('../servicos/parte3');
+const notificacoes = require('../servicos/notificacoes');
+
+const router = express.Router();
+const parametros = z.object({ id: idRota });
+
+router.use(exigirPerfil('dono'));
+
+router.get('/', async (req, res) => {
+  try {
+    return res.json(await notificacoes.listar(req.usuario));
+  } catch (erro) {
+    return parte3.responderFalha(res, erro);
+  }
+});
+
+router.patch('/:id/lida', validar(parametros, 'params'), async (req, res) => {
+  try {
+    return res.json(await notificacoes.marcarLida(req.usuario, req.params.id));
+  } catch (erro) {
+    return parte3.responderFalha(res, erro);
+  }
+});
+
+module.exports = router;

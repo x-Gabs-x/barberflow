@@ -1,0 +1,1 @@
+module.exports = { VERSAO_TERMOS: '2026-11-08' };
