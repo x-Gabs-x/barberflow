@@ -1,7 +1,6 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Botao from '../../components/Botao';
-import Campo from '../../components/Campo';
 import Card from '../../components/Card';
 import SeloStatus from '../../components/SeloStatus';
 import { api, ErroApi } from '../../api/cliente';
@@ -18,11 +17,6 @@ type Membro = {
 type Aviso = { texto: string; erro: boolean } | null;
 
 const nomesPerfil = { dono: 'Dono', parceiro: 'Parceiro', recepcao: 'Recepção' };
-
-function escoteValido(texto: string) {
-  const n = Number(texto);
-  return texto !== '' && Number.isInteger(n) && n >= 0 && n <= 100;
-}
 
 function iniciais(nome: string) {
   const partes = nome.trim().split(' ');
@@ -47,7 +41,6 @@ function Cabecalho({ membro, status }: { membro: Membro; status: 'ativo' | 'agua
 export default function Equipe() {
   const [equipe, setEquipe] = useState<Membro[]>([]);
   const [pedidos, setPedidos] = useState<Membro[]>([]);
-  const [escotes, setEscotes] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState<Aviso>(null);
   const [confirmarRemocao, setConfirmarRemocao] = useState<string | null>(null);
   const rolagem = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -64,11 +57,6 @@ export default function Equipe() {
   function preencher(ativos: Membro[], aguardando: Membro[]) {
     setEquipe(ativos);
     setPedidos(aguardando);
-    const valores: Record<string, string> = {};
-    ativos.filter((m) => m.perfil === 'dono').forEach((m) => {
-      valores[m.id] = m.escote_percentual === null ? '' : String(m.escote_percentual);
-    });
-    setEscotes(valores);
   }
 
   useEffect(() => {
@@ -81,7 +69,7 @@ export default function Equipe() {
     try {
       await api.post(`/equipe/pedidos/${pedido.id}/aprovar`);
       setPedidos(pedidos.filter((p) => p.id !== pedido.id));
-      setEquipe([...equipe, { ...pedido, status: 'ativo', escote_percentual: pedido.perfil === 'parceiro' ? 40 : null }]);
+      setEquipe([...equipe, { ...pedido, status: 'ativo', escote_percentual: pedido.perfil === 'dono' ? 100 : pedido.perfil === 'parceiro' ? 40 : null }]);
       avisar(`${pedido.usuario.nome_completo} entrou na equipe.`);
     } catch (e) {
       mostrarErro(e);
@@ -93,20 +81,6 @@ export default function Equipe() {
       await api.post(`/equipe/pedidos/${pedido.id}/recusar`);
       setPedidos(pedidos.filter((p) => p.id !== pedido.id));
       avisar(`Pedido de ${pedido.usuario.nome_completo} recusado.`);
-    } catch (e) {
-      mostrarErro(e);
-    }
-  }
-
-  async function salvarEscote(membro: Membro) {
-    if (!escoteValido(escotes[membro.id])) {
-      return avisar('O escote deve ser um número de 0 a 100.', true);
-    }
-    try {
-      const percentual = Number(escotes[membro.id]);
-      await api.patch(`/equipe/${membro.id}/escote`, { percentual });
-      setEquipe(equipe.map((m) => (m.id === membro.id ? { ...m, escote_percentual: percentual } : m)));
-      avisar(`Escote de ${membro.usuario.nome_completo} salvo.`);
     } catch (e) {
       mostrarErro(e);
     }
@@ -163,18 +137,8 @@ export default function Equipe() {
           <Cabecalho membro={m} status="ativo" />
           {m.perfil === 'parceiro' ? (
             <Text style={estilos.suave}>Fica com 40% · Barbearia 60%</Text>
-          ) : m.perfil === 'dono' && m.escote_percentual !== null ? (
-            <Text style={estilos.suave}>
-              Fica com {m.escote_percentual}% · Barbearia {100 - m.escote_percentual}%
-            </Text>
-          ) : null}
-          {m.perfil === 'dono' ? (
-            <Campo
-              rotulo="Escote (%)"
-              valor={escotes[m.id] ?? ''}
-              onChangeText={(t) => setEscotes({ ...escotes, [m.id]: t })}
-              keyboardType="numeric"
-            />
+          ) : m.perfil === 'dono' ? (
+            <Text style={estilos.suave}>Quando atende como barbeiro, fica com 100% do valor.</Text>
           ) : null}
           <View style={estilos.linha}>
             {m.perfil !== 'dono' ? (
@@ -184,11 +148,6 @@ export default function Equipe() {
                   variante="perigo"
                   onPress={() => remover(m)}
                 />
-              </View>
-            ) : null}
-            {m.perfil === 'dono' ? (
-              <View style={{ flex: 1 }}>
-                <Botao titulo="Salvar escote" variante="secundario" onPress={() => salvarEscote(m)} />
               </View>
             ) : null}
           </View>

@@ -54,12 +54,20 @@ function periodoDoDia(dia) {
 }
 async function listarDia(usuario, dia) {
   const [inicio, fim] = periodoDoDia(dia);
-  let consulta = supabase.from('atendimento').select(campos).eq('estabelecimento_id', usuario.estabelecimento_id)
-    .gte('inicio', inicio).lt('inicio', fim).order('inicio', { ascending: true }).limit(200);
-  if (usuario.perfil === 'parceiro') consulta = consulta.eq('barbeiro_id', usuario.id);
-  const { data, error } = await consulta;
-  conferirBanco(error);
-  return Promise.all((data || []).map(serializar));
+  const atendimentos = [];
+  const tamanhoPagina = 500;
+  for (let pagina = 0; ; pagina++) {
+    let consulta = supabase.from('atendimento').select(campos).eq('estabelecimento_id', usuario.estabelecimento_id)
+      .gte('inicio', inicio).lt('inicio', fim)
+      .order('inicio', { ascending: true }).order('id', { ascending: true })
+      .range(pagina * tamanhoPagina, (pagina + 1) * tamanhoPagina - 1);
+    if (usuario.perfil === 'parceiro') consulta = consulta.eq('barbeiro_id', usuario.id);
+    const { data, error } = await consulta;
+    conferirBanco(error);
+    atendimentos.push(...(data || []));
+    if (!data || data.length < tamanhoPagina) break;
+  }
+  return Promise.all(atendimentos.map(serializar));
 }
 async function obterEmAndamento(usuario) {
   const { data, error } = await supabase.from('atendimento').select(campos)

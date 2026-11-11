@@ -62,7 +62,7 @@ function salvar(req, id, body, encerrar = false) {
     if (Date.parse(fim) <= Date.parse(a.inicio)) throw falha(400, 'fim_invalido', 'O fim deve ser posterior ao início.');
     a.fim = fim;
     a.status = 'registrado';
-    a.escote_percentual = req.usuario.perfil === 'dono' ? 70 : 40;
+    a.escote_percentual = req.usuario.perfil === 'dono' ? 100 : 40;
     a.valor_barbeiro = Math.round(a.valor_total * a.escote_percentual) / 100;
     a.valor_barbearia = Math.round((a.valor_total - a.valor_barbeiro) * 100) / 100;
   }

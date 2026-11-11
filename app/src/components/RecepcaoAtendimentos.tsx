@@ -101,10 +101,12 @@ export default function RecepcaoAtendimentos() {
           observacoes, forma_pagamento: pagamento,
           nsu: pagamento === 'dinheiro' ? null : nsu.trim() || null,
         });
-      setLista((anteriores) => anteriores.map((a) => a.id === atualizado.id ? atualizado : a));
+      const resultado = acao === 'validar' ? { ...atualizado, status: 'validado_recepcao' as const } : atualizado;
+      setLista((anteriores) => anteriores.map((a) => a.id === resultado.id ? resultado : a));
       setEditando(false); setRejeitando(false);
-      setAviso(acao === 'validar' ? 'Atendimento validado e encaminhado para o fechamento.'
+      setAviso(acao === 'validar' ? `Atendimento finalizado e validado. O valor de ${dinheiro(atualizado.valor_total)} foi incluído no fechamento do dia da barbearia.`
         : acao === 'rejeitar' ? 'Atendimento rejeitado.' : 'Correções salvas com sucesso.');
+      if (acao === 'validar') setFiltro('validados');
       setSelecionado(null);
       setVersao((v) => v + 1);
     } catch (e) {

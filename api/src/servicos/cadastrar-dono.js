@@ -120,6 +120,7 @@ function criarCadastroDono(supabase, registrarErro = (evento) => console.error(e
         estabelecimento_id: estabelecimentoId,
         perfil: 'dono',
         status: 'ativo',
+        escote_percentual: 100,
       });
       if (vinculo.error) throw vinculo.error;
 

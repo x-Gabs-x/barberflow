@@ -71,7 +71,7 @@ export function diaPorExtenso(dia: string) {
 }
 export function statusNome(status: StatusAtendimento) {
   const nomes: Record<StatusAtendimento, string> = {
-    em_andamento: 'Em andamento', registrado: 'Registrado', validado_recepcao: 'Validado pela recepção',
+    em_andamento: 'Em andamento', registrado: 'Registrado', validado_recepcao: 'Finalizado e validado',
     validado_dono: 'Validado pelo dono', rejeitado: 'Rejeitado',
   };
   return nomes[status];

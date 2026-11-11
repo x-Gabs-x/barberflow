@@ -115,7 +115,7 @@ async function registrarEscote(usuario, vinculoId, anterior, novo) {
 
 async function aprovarPedido(usuario, id) {
   const pedido = await buscarVinculo(usuario, id, 'aguardando');
-  const escoteFinal = pedido.perfil === 'parceiro' ? 40 : null;
+  const escoteFinal = pedido.perfil === 'dono' ? 100 : pedido.perfil === 'parceiro' ? 40 : null;
   await atualizarVinculo(usuario, id, 'aguardando', { status: 'ativo', escote_percentual: escoteFinal });
   if (escoteFinal !== null && pedido.escote_percentual !== escoteFinal) {
     await registrarEscote(usuario, id, pedido.escote_percentual, escoteFinal);
@@ -137,10 +137,7 @@ async function alterarEscote(usuario, id, percentual) {
   if (membro.perfil === 'parceiro') {
     throw falha(400, 'escote_fixo', 'O escote dos barbeiros é fixo em 40%.');
   }
-  const anterior = membro.escote_percentual;
-  await atualizarVinculo(usuario, id, 'ativo', { escote_percentual: percentual });
-  await registrarEscote(usuario, id, anterior, percentual);
-  return { ok: true, percentual_anterior: anterior, percentual_novo: percentual };
+  throw falha(400, 'escote_fixo', 'O escote do dono é fixo em 100% nos atendimentos que ele realiza.');
 }
 
 async function removerMembro(usuario, id) {

@@ -1,4 +1,5 @@
 import { api } from './cliente';
+import { Atendimento } from './parte3';
 
 export type ResumoFechamento = {
   data: string;
@@ -18,6 +19,7 @@ export type ResumoFechamento = {
 
 export const fechamentoApi = {
   resumo: (dia: string) => api.get<ResumoFechamento>(`/fechamento?data=${encodeURIComponent(dia)}`),
+  atendimentos: (dia: string) => api.get<Atendimento[]>(`/atendimentos?data=${encodeURIComponent(dia)}`),
   confirmar: (dia: string) => api.post<{ ok: boolean; data: string; status: 'confirmado' }>('/fechamento/confirmar', { data: dia }),
   devolver: (dia: string, justificativa: string) => api.post<{ ok: boolean; data: string; status: 'aberto' }>('/fechamento/devolver', { data: dia, justificativa }),
 };

@@ -170,7 +170,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
     try {
       if (arquivo) await enviarArquivo(atendimento.id);
       await parte3Api.encerrar(atendimento.id, dadosFormulario());
-      router.replace({ pathname: '/', params: { atendimentoFinalizado: '1' } });
+      router.replace(agendaRota);
     } catch (e) {
       setErro(mensagemErro(e));
     } finally { setSalvando(false); }

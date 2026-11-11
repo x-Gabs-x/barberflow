@@ -35,7 +35,7 @@ export const TERMOS_DE_USO: Secao[] = [
   {
     titulo: '6. Responsabilidades do dono',
     texto:
-      'O dono define os serviços, os preços, o horário de funcionamento e o escote de cada barbeiro (e o próprio), aprova ou recusa pedidos de entrada, valida o fechamento do dia e decide quem fica na equipe. Os dados dos clientes cadastrados no sistema são tratados pela barbearia, e o dono responde por eles perante os clientes.',
+      'O dono define os serviços, os preços e o horário de funcionamento, aprova ou recusa pedidos de entrada, valida o fechamento do dia e decide quem fica na equipe. O repasse é fixo: o barbeiro parceiro recebe 40% e a barbearia fica com 60%; nos atendimentos que o dono realiza como barbeiro, ele recebe 100%. Os dados dos clientes cadastrados no sistema são tratados pela barbearia, e o dono responde por eles perante os clientes.',
   },
   {
     titulo: '7. Validação e fechamento',

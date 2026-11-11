@@ -16,7 +16,7 @@ const atendimento = {
 };
 
 const equipe = [
-  { id: 'v1', usuario: { id: 'u1', nome_completo: 'Dono de Teste' }, perfil: 'dono', escote_percentual: 70, status: 'ativo' },
+  { id: 'v1', usuario: { id: 'u1', nome_completo: 'Dono de Teste' }, perfil: 'dono', escote_percentual: 100, status: 'ativo' },
   { id: 'v2', usuario: { id: 'u7', nome_completo: 'Rafael Souza' }, perfil: 'parceiro', escote_percentual: 40, status: 'ativo' },
   { id: 'v3', usuario: { id: 'u8', nome_completo: 'Diego Lima' }, perfil: 'parceiro', escote_percentual: 40, status: 'aguardando' },
 ];

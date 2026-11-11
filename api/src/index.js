@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { rateLimit } = require('express-rate-limit');
 const supabase = require('./supabase');
 const { autenticar } = require('./middlewares/autenticar');
 
@@ -9,15 +8,6 @@ const app = express();
 app.disable('x-powered-by');
 app.use(cors({ origin: process.env.CORS_ORIGEM ? process.env.CORS_ORIGEM.split(',') : true }));
 app.use(express.json({ limit: '100kb' }));
-
-const limiteDeAcesso = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  skip: () => process.env.DEV_SEM_LOGIN === 'true',
-  message: { erro: 'muitas_tentativas', mensagem: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },
-});
 
 app.get('/saude', async (req, res) => {
   const { error } = await supabase
@@ -31,7 +21,7 @@ app.get('/saude', async (req, res) => {
   res.json({ ok: true, banco: 'conectado' });
 });
 
-app.use('/auth', limiteDeAcesso, require('./rotas/auth'));
+app.use('/auth', require('./rotas/auth'));
 
 app.use('/me', autenticar, require('./rotas/me'));
 app.use('/agenda', autenticar, require('./rotas/agenda'));
