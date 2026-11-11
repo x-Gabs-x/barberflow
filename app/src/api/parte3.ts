@@ -49,7 +49,7 @@ export const parte3Api = {
   encerrar: (id: string, dados: EditarAtendimento) => api.post<Atendimento>(`/atendimentos/${encodeURIComponent(id)}/encerrar`, dados),
   servicos: () => api.get<Servico[]>('/servicos'),
   equipe: () => api.get<MembroEquipe[]>('/equipe'),
-  buscarCliente: (cpf: string) => api.get<Cliente[]>(`/clientes?cpf=${encodeURIComponent(cpf)}`),
+  buscarCliente: (consulta: string) => api.get<Cliente[]>(`/clientes?q=${encodeURIComponent(consulta)}`),
   cadastrarCliente: (dados: { cpf: string; nome_completo: string; telefone?: string }) => api.post<Cliente>('/clientes', dados),
 };
 export function dinheiro(valor: number) {

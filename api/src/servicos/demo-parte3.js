@@ -80,7 +80,13 @@ function comprovante(req, id) {
   a.comprovante_anexado = true;
   return clonar(a);
 }
-function listarClientes(cpf) { return clonar(clientes.filter((c) => !cpf || c.cpf === cpf)); }
+function listarClientes(consulta) {
+  const termo = String(consulta || '').trim().toLocaleLowerCase('pt-BR');
+  const digitos = termo.replace(/\D/g, '');
+  return clonar(clientes.filter((c) => !termo
+    || (digitos.length > 0 && c.cpf.includes(digitos))
+    || c.nome_completo.toLocaleLowerCase('pt-BR').includes(termo)));
+}
 function cadastrarCliente(dados) {
   if (clientes.some((c) => c.cpf === dados.cpf)) throw falha(409, 'cliente_existente', 'Este CPF já está cadastrado.');
   const c = { id: `demo-cliente-${++seq}`, ...dados };

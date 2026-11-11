@@ -1,4 +1,4 @@
-import { View, Text, TextInput, StyleSheet, KeyboardTypeOptions } from 'react-native';
+import { View, Text, TextInput, StyleSheet, KeyboardTypeOptions, TextInputProps } from 'react-native';
 import { cores, raio } from '../theme';
 
 type Props = {
@@ -8,10 +8,11 @@ type Props = {
   placeholder?: string;
   secureTextEntry?: boolean;
   keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: TextInputProps['autoCapitalize'];
   erro?: string;
 };
 
-export default function Campo({ rotulo, valor, onChangeText, placeholder, secureTextEntry, keyboardType, erro }: Props) {
+export default function Campo({ rotulo, valor, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, erro }: Props) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={estilos.rotulo}>{rotulo}</Text>
@@ -21,7 +22,7 @@ export default function Campo({ rotulo, valor, onChangeText, placeholder, secure
         placeholder={placeholder}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
-        autoCapitalize="none"
+        autoCapitalize={autoCapitalize ?? 'none'}
         style={[estilos.campo, erro ? { borderColor: cores.erro } : null]}
       />
       {erro ? <Text style={estilos.erro}>{erro}</Text> : null}

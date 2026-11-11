@@ -4,13 +4,32 @@ const supabase = require('../supabase');
 const parte3 = require('../servicos/parte3');
 const demo = require('../servicos/demo-parte3');
 const router = express.Router();
-const consulta = z.object({ cpf: cpf.optional() }).strict();
+const consulta = z.object({ cpf: cpf.optional(), q: z.string().trim().min(1).max(120).optional() }).strict();
 const novoCliente = z.object({ cpf, nome_completo: texto(), telefone: telefone.optional() }).strict();
 
 router.get('/', validar(consulta, 'query'), async (req, res) => {
   try {
-    const { cpf: filtro } = req.validado.query;
-    if (demo.ativo(req)) return res.json(demo.listarClientes(filtro));
+    const { cpf: filtro, q } = req.validado.query;
+    if (demo.ativo(req)) return res.json(demo.listarClientes(q || filtro));
+    if (q) {
+      const digitos = q.replace(/\D/g, '');
+      const buscaNome = q.replace(/[\\%_]/g, '\\$&');
+      const consultas = [
+        supabase.from('cliente').select('id,cpf,nome_completo,telefone')
+          .eq('estabelecimento_id', req.usuario.estabelecimento_id)
+          .ilike('nome_completo', `%${buscaNome}%`).order('nome_completo').limit(50),
+      ];
+      if (digitos.length && digitos.length <= 11) {
+        consultas.push(supabase.from('cliente').select('id,cpf,nome_completo,telefone')
+          .eq('estabelecimento_id', req.usuario.estabelecimento_id)
+          .ilike('cpf', `%${digitos}%`).order('nome_completo').limit(50));
+      }
+      const resultados = await Promise.all(consultas);
+      resultados.forEach(({ error }) => parte3.conferirBanco(error));
+      const unicos = new Map();
+      resultados.forEach(({ data }) => (data || []).forEach((cliente) => unicos.set(cliente.id, cliente)));
+      return res.json([...unicos.values()].sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR')).slice(0, 50));
+    }
     let busca = supabase.from('cliente').select('id,cpf,nome_completo,telefone')
       .eq('estabelecimento_id', req.usuario.estabelecimento_id).order('nome_completo').limit(50);
     if (filtro) busca = busca.eq('cpf', filtro);

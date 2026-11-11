@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -6,7 +6,7 @@ import Botao from './Botao';
 import Card from './Card';
 import Campo from './Campo';
 import { cores, raio } from '../theme';
-import { enviarComprovante } from '../api/cliente';
+import { ErroApi, enviarComprovante } from '../api/cliente';
 import { alternarServico, normalizarSelecionados } from '../api/combinacoes';
 import { Atendimento, Cliente, EditarAtendimento, Perfil, Servico, dinheiro, horaLocal, mensagemErro, parte3Api, statusNome } from '../api/parte3';
 
@@ -16,11 +16,20 @@ const formas = [
   { id: 'pix', nome: 'Pix' },
   { id: 'cartao', nome: 'Cartão' },
 ] as const;
-const servicosDemonstrativos: Servico[] = [
-  { id: 'mock-corte', nome: 'Corte', preco: 30, ativo: true },
-  { id: 'mock-barba', nome: 'Barba', preco: 20, ativo: true },
-  { id: 'mock-corte-barba', nome: 'Corte e barba', preco: 40, ativo: true },
-];
+
+function formatarCpf(texto: string) {
+  return texto.replace(/\D/g, '').slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+
+function formatarTelefone(texto: string) {
+  const numero = texto.replace(/\D/g, '').slice(0, 11);
+  if (numero.length <= 2) return numero ? `(${numero}` : '';
+  if (numero.length <= 10) return numero.replace(/^(\d{2})(\d{0,4})(\d{0,4})$/, (_, ddd, inicio, fim) => `(${ddd}) ${inicio}${fim ? `-${fim}` : ''}`);
+  return numero.replace(/^(\d{2})(\d{0,5})(\d{0,4})$/, (_, ddd, inicio, fim) => `(${ddd}) ${inicio}${fim ? `-${fim}` : ''}`);
+}
 
 export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -28,10 +37,12 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const [atendimento, setAtendimento] = useState<Atendimento | null>(null);
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [cliente, setCliente] = useState<Cliente | null>(null);
-  const [cpf, setCpf] = useState('');
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [resultadosCliente, setResultadosCliente] = useState<Cliente[]>([]);
+  const [buscandoClientes, setBuscandoClientes] = useState(false);
+  const [cpfNovo, setCpfNovo] = useState('');
   const [nomeNovo, setNomeNovo] = useState('');
   const [telefoneNovo, setTelefoneNovo] = useState('');
-  const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [pagamento, setPagamento] = useState<EditarAtendimento['forma_pagamento']>(null);
   const [observacoes, setObservacoes] = useState('');
@@ -41,26 +52,31 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [demonstracao, setDemonstracao] = useState(false);
+  const [requerLogin, setRequerLogin] = useState(false);
 
   const bloqueado = !!atendimento && atendimento.status !== 'em_andamento';
   const idBancoValido = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   const servicosUsaveis = servicos.filter((s) => demonstracao || idBancoValido(s.id));
-  const catalogoPendente = !demonstracao && servicos.some((s) => !idBancoValido(s.id));
-  const mostrarServicosDemonstrativos = !bloqueado && !servicosUsaveis.length && !demonstracao;
+  const servicosAtivos = servicosUsaveis.filter((s) => s.ativo);
   const podeEditar = !!atendimento && !bloqueado;
   const valor = selecionados.reduce((total, idServico) => total + Number(servicosUsaveis.find((s) => s.id === idServico)?.preco || 0), 0);
   const agendaRota = perfil === 'dono' ? '/dono/agenda' : '/parceiro/agenda';
+
+  const exibirErro = useCallback((erroApi: unknown, contexto?: string) => {
+    setErro(contexto ? `${contexto}: ${mensagemErro(erroApi)}` : mensagemErro(erroApi));
+    if (erroApi instanceof ErroApi && erroApi.status === 401) setRequerLogin(true);
+  }, []);
 
   function preencher(a: Atendimento) {
     setAtendimento(a);
     if (a.demonstracao) setDemonstracao(true);
     const c = a.cliente as Cliente | null;
     setCliente(c);
-    setCpf(c?.cpf || '');
     setSelecionados(a.status === 'em_andamento' ? normalizarSelecionados(a.servicos.map((s) => s.id), a.servicos) : a.servicos.map((s) => s.id).filter(Boolean));
     setPagamento(a.forma_pagamento === 'cartao' ? null : a.forma_pagamento);
     setObservacoes(a.observacoes || '');
-    setNaoEncontrado(false);
+    setBuscaCliente('');
+    setResultadosCliente([]);
   }
 
   useFocusEffect(useCallback(() => {
@@ -78,10 +94,38 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
         if (dados.em_andamento) preencher(dados.em_andamento);
         else setAtendimento(null);
       } else preencher(dados);
-    }).catch((e) => { if (ativo) setErro(mensagemErro(e)); })
+    }).catch((e) => { if (ativo) exibirErro(e); })
       .finally(() => { if (ativo) setCarregando(false); });
     return () => { ativo = false; };
-  }, [id]));
+  }, [exibirErro, id]));
+
+  useEffect(() => {
+    const consulta = buscaCliente.trim();
+    if (!podeEditar || consulta.length < 2) {
+      setResultadosCliente([]);
+      setBuscandoClientes(false);
+      return;
+    }
+
+    let ativo = true;
+    const temporizador = setTimeout(() => {
+      setBuscandoClientes(true);
+      parte3Api.buscarCliente(consulta)
+        .then((clientes) => {
+          if (ativo) setResultadosCliente(clientes);
+        })
+        .catch((e) => {
+          if (ativo) exibirErro(e);
+        })
+        .finally(() => {
+          if (ativo) setBuscandoClientes(false);
+        });
+    }, 250);
+    return () => {
+      ativo = false;
+      clearTimeout(temporizador);
+    };
+  }, [buscaCliente, exibirErro, podeEditar]);
 
   async function iniciar() {
     if (salvando) return;
@@ -91,33 +135,37 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
       preencher(a);
       router.setParams({ id: a.id });
       setAviso('Atendimento iniciado. Informe o cliente e os serviços.');
-    } catch (e) { setErro(mensagemErro(e)); }
+    } catch (e) { exibirErro(e); }
     finally { setSalvando(false); }
   }
 
-  async function buscarCliente() {
-    setErro(''); setAviso('');
-    const numero = cpf.replace(/\D/g, '');
-    if (numero.length !== 11) { setErro('Informe os 11 dígitos do CPF.'); return; }
-    setSalvando(true);
-    try {
-      const encontrados = await parte3Api.buscarCliente(numero);
-      setCliente(encontrados[0] || null);
-      setNaoEncontrado(encontrados.length === 0);
-      if (!encontrados.length) setAviso('Cliente não cadastrado. Preencha os dados para cadastrar.');
-      else setAviso(`Cliente encontrado: ${encontrados[0].nome_completo}`);
-    } catch (e) { setErro(mensagemErro(e)); }
-    finally { setSalvando(false); }
+  function selecionarCliente(selecionado: Cliente) {
+    setCliente(selecionado);
+    setBuscaCliente('');
+    setResultadosCliente([]);
+    setErro('');
+    setAviso(`Cliente selecionado: ${selecionado.nome_completo}`);
   }
 
   async function cadastrarCliente() {
+    const cpf = cpfNovo.replace(/\D/g, '');
+    if (cpf.length !== 11) { setErro('Informe os 11 dígitos do CPF do novo cliente.'); return; }
     if (!nomeNovo.trim()) { setErro('Informe o nome completo do cliente.'); return; }
-    setSalvando(true); setErro('');
+    setSalvando(true);
+    setErro('');
     try {
-      const c = await parte3Api.cadastrarCliente({ cpf: cpf.replace(/\D/g, ''), nome_completo: nomeNovo.trim(),
-        ...(telefoneNovo.trim() ? { telefone: telefoneNovo.trim() } : {}) });
-      setCliente(c); setNaoEncontrado(false); setAviso('Cliente cadastrado e selecionado para o atendimento.');
-    } catch (e) { setErro(mensagemErro(e)); }
+      const telefone = telefoneNovo.replace(/\D/g, '');
+      const c = await parte3Api.cadastrarCliente({
+        cpf,
+        nome_completo: nomeNovo.trim(),
+        ...(telefone ? { telefone } : {}),
+      });
+      selecionarCliente(c);
+      setCpfNovo('');
+      setNomeNovo('');
+      setTelefoneNovo('');
+      setAviso('Cliente cadastrado e selecionado para o atendimento.');
+    } catch (e) { exibirErro(e); }
     finally { setSalvando(false); }
   }
 
@@ -147,7 +195,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
       const binario = escolhido.file || await (await fetch(escolhido.uri)).blob();
       if (binario.size > 6 * 1024 * 1024) { setErro('O arquivo deve ter até 6 MB.'); return; }
       setArquivo({ nome: escolhido.name, tamanho: binario.size, tipo, arquivo: binario });
-    } catch (e) { setErro(`Não foi possível abrir o arquivo: ${mensagemErro(e)}`); }
+    } catch (e) { exibirErro(e, 'Não foi possível abrir o arquivo'); }
   }
 
   async function enviarArquivo(idAtendimento: string) {
@@ -172,7 +220,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
       await parte3Api.encerrar(atendimento.id, dadosFormulario());
       router.replace(agendaRota);
     } catch (e) {
-      setErro(mensagemErro(e));
+      exibirErro(e);
     } finally { setSalvando(false); }
   }
 
@@ -183,7 +231,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
       await enviarArquivo(atendimento.id);
       preencher(await parte3Api.atendimento(atendimento.id));
       setAviso('Comprovante enviado com sucesso.');
-    } catch (e) { setErro(mensagemErro(e)); }
+    } catch (e) { exibirErro(e); }
     finally { setSalvando(false); }
   }
 
@@ -197,6 +245,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
       </View>
       {demonstracao ? <Text style={estilos.demo}>AMBIENTE DE TESTE · Dados temporários, sem gravação real no Supabase.</Text> : null}
       {erro ? <Text accessibilityRole="alert" style={estilos.erro}>{erro}</Text> : null}
+      {requerLogin ? <Botao titulo="Ir para o login e continuar" onPress={() => router.replace('/acesso/login')} /> : null}
       {aviso ? <Text style={estilos.aviso}>{aviso}</Text> : null}
       {carregando ? <ActivityIndicator color={cores.dourado} size="large" /> : null}
 
@@ -223,37 +272,75 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
               <View style={estilos.selecionado}>
                 <Text style={estilos.nome}>{cliente.nome_completo}</Text>
                 <Text style={estilos.suave}>CPF: {cliente.cpf}</Text>
-                {podeEditar ? <Pressable onPress={() => { setCliente(null); setCpf(''); setNaoEncontrado(false); }}><Text style={estilos.link}>Trocar cliente</Text></Pressable> : null}
+                {podeEditar ? <Pressable onPress={() => setCliente(null)}><Text style={estilos.link}>Trocar cliente</Text></Pressable> : null}
               </View>
-            ) : podeEditar ? (
+            ) : !podeEditar ? <Text style={estilos.suave}>Cliente não informado.</Text> : null}
+            {podeEditar ? (
               <>
-                <Campo rotulo="CPF do cliente" valor={cpf} onChangeText={(texto) => { setCpf(texto); setNaoEncontrado(false); }} placeholder="000.000.000-00" keyboardType="numeric" />
-                <Botao titulo="Pesquisar CPF" variante="secundario" onPress={buscarCliente} desabilitado={salvando} />
-                {naoEncontrado ? (
-                  <View style={estilos.grupo}>
-                    <Text style={estilos.rotulo}>CPF não cadastrado</Text>
-                    <Text style={estilos.suave}>Informe o nome para cadastrar este cliente na barbearia e vinculá-lo ao atendimento.</Text>
-                    <Campo rotulo="Nome completo" valor={nomeNovo} onChangeText={setNomeNovo} placeholder="Nome do cliente" />
-                    <Campo rotulo="Telefone (opcional)" valor={telefoneNovo} onChangeText={setTelefoneNovo} placeholder="(83) 99999-9999" keyboardType="phone-pad" />
-                    <Botao titulo="Cadastrar cliente e vincular ao atendimento" onPress={cadastrarCliente} desabilitado={salvando} />
+                <Campo
+                  rotulo="Buscar cliente por nome ou CPF"
+                  valor={buscaCliente}
+                  onChangeText={setBuscaCliente}
+                  placeholder="Digite o nome ou CPF"
+                  autoCapitalize="words"
+                />
+                {buscandoClientes ? <ActivityIndicator color={cores.dourado} /> : null}
+                {resultadosCliente.length > 0 ? (
+                  <View style={estilos.dropdown}>
+                    {resultadosCliente.map((resultado) => (
+                      <Pressable
+                        key={resultado.id}
+                        accessibilityRole="button"
+                        onPress={() => selecionarCliente(resultado)}
+                        style={estilos.opcaoCliente}
+                      >
+                        <Text style={estilos.nome}>{resultado.nome_completo}</Text>
+                        <Text style={estilos.suave}>CPF: {formatarCpf(resultado.cpf)}</Text>
+                      </Pressable>
+                    ))}
                   </View>
                 ) : null}
+                {buscaCliente.trim().length >= 2 && !buscandoClientes && !resultadosCliente.length
+                  ? <Text style={estilos.suave}>Nenhum cliente encontrado. Você pode cadastrá-lo abaixo.</Text>
+                  : null}
+                <View style={estilos.grupo}>
+                  <Text style={estilos.rotulo}>NOVO CLIENTE</Text>
+                  <Text style={estilos.suave}>Cadastre os dados abaixo para vincular um novo cliente ao atendimento.</Text>
+                  <Campo
+                    rotulo="Nome completo"
+                    valor={nomeNovo}
+                    onChangeText={setNomeNovo}
+                    placeholder="Nome do cliente"
+                    autoCapitalize="words"
+                  />
+                  <Campo
+                    rotulo="CPF"
+                    valor={formatarCpf(cpfNovo)}
+                    onChangeText={(texto) => setCpfNovo(texto.replace(/\D/g, '').slice(0, 11))}
+                    placeholder="000.000.000-00"
+                    keyboardType="numeric"
+                  />
+                  <Campo
+                    rotulo="Telefone (opcional)"
+                    valor={formatarTelefone(telefoneNovo)}
+                    onChangeText={(texto) => setTelefoneNovo(texto.replace(/\D/g, '').slice(0, 11))}
+                    placeholder="(83) 99999-9999"
+                    keyboardType="phone-pad"
+                  />
+                  <Botao titulo="Cadastrar cliente e vincular ao atendimento" onPress={cadastrarCliente} desabilitado={salvando} />
+                </View>
               </>
-            ) : <Text style={estilos.suave}>Cliente não informado.</Text>}
+            ) : null}
           </Card>
 
           <Card>
             <Text style={estilos.secao}>02  ·  Serviços executados</Text>
-            {!bloqueado && catalogoPendente ? <Text style={estilos.avisoTexto}>A rota de serviços ainda retornou identificadores de exemplo. A integração com os serviços reais do Zac está pendente; esses exemplos não podem ser utilizados para gravar atendimentos reais.</Text> : null}
-            {mostrarServicosDemonstrativos ? <Text style={estilos.avisoTexto}>Prévia demonstrativa de preços. Cadastre os serviços no catálogo da barbearia para selecioná-los e salvar atendimentos reais.</Text> : null}
-            {!bloqueado && !servicosUsaveis.length && !mostrarServicosDemonstrativos ? <Text style={estilos.suave}>Nenhum serviço real disponível. A lista depende do cadastro de serviços da Parte 5 (Zac).</Text> : null}
-            {mostrarServicosDemonstrativos ? servicosDemonstrativos.map((servico) => (
-              <View key={servico.id} style={estilos.opcaoServico}>
-                <View style={[estilos.checkbox, estilos.checkboxDesabilitado]} />
-                <Text style={[estilos.nome, { flex: 1 }]}>{servico.nome}</Text>
-                <Text style={estilos.valor}>{dinheiro(servico.preco)}</Text>
+            {!bloqueado && !servicosAtivos.length ? (
+              <View style={estilos.avisoServicos}>
+                <Text style={estilos.avisoTexto}>Nenhum serviço cadastrado, solicite o cadastramento para prosseguir.</Text>
+                {perfil === 'dono' ? <Botao titulo="Cadastrar serviços" onPress={() => router.push('/dono/servicos')} /> : null}
               </View>
-            )) : null}
+            ) : null}
             {(bloqueado ? atendimento.servicos.map((s) => ({ ...s, ativo: true })) : servicosUsaveis.filter((s) => s.ativo || selecionados.includes(s.id))).map((s) => (
               <Pressable key={s.id} disabled={bloqueado || !s.ativo} onPress={() => trocarServico(s.id)} style={[estilos.opcaoServico, selecionados.includes(s.id) && estilos.opcaoSelecionada]}>
                 <View style={[estilos.checkbox, selecionados.includes(s.id) && estilos.checkboxMarcado]}><Text style={estilos.checkTexto}>{selecionados.includes(s.id) ? '✓' : ''}</Text></View>
@@ -330,6 +417,9 @@ const estilos = StyleSheet.create({
   link: { color: cores.dourado, fontWeight: '700', fontSize: 14 },
   grupo: { gap: 12, borderTopColor: cores.borda, borderTopWidth: 1, marginTop: 6, paddingTop: 14 },
   selecionado: { borderRadius: raio.campo, backgroundColor: cores.fundo, padding: 14, gap: 6 },
+  dropdown: { maxHeight: 260, borderWidth: 1, borderColor: cores.borda, borderRadius: raio.campo, overflow: 'hidden', backgroundColor: cores.branco },
+  opcaoCliente: { padding: 12, gap: 3, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: cores.borda },
+  avisoServicos: { gap: 12, padding: 14, borderRadius: raio.campo, backgroundColor: cores.avisoFundo },
   opcaoServico: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: cores.borda, borderRadius: raio.campo, padding: 14 },
   opcaoSelecionada: { borderColor: cores.dourado, backgroundColor: cores.avisoFundo },
   checkbox: { height: 23, width: 23, borderWidth: 1, borderColor: cores.borda, borderRadius: 6, backgroundColor: cores.branco, alignItems: 'center', justifyContent: 'center' },

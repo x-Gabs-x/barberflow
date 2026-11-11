@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import AceiteTermos from '../../components/AceiteTermos';
 import Botao from '../../components/Botao';
 import Campo from '../../components/Campo';
+import SeletorData from '../../components/SeletorData';
+import SeletorMunicipio from '../../components/SeletorMunicipio';
 import { api, ErroApi, errosPorCampo } from '../../api/cliente';
 import { cores, raio } from '../../theme';
 
@@ -21,6 +23,24 @@ type CamposComuns = {
 function mensagemDoErro(erro: unknown) {
   if (erro instanceof ErroApi) return erro.message;
   return 'Não foi possível acessar a API. Verifique sua conexão e tente novamente.';
+}
+
+function digitos(texto: string) {
+  return texto.replace(/\D/g, '');
+}
+
+function formatarCpf(texto: string) {
+  return digitos(texto).slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+
+function formatarTelefone(texto: string) {
+  const numero = digitos(texto).slice(0, 11);
+  if (numero.length <= 2) return numero ? `(${numero}` : '';
+  if (numero.length <= 10) return numero.replace(/^(\d{2})(\d{0,4})(\d{0,4})$/, (_, ddd, inicio, fim) => `(${ddd}) ${inicio}${fim ? `-${fim}` : ''}`);
+  return numero.replace(/^(\d{2})(\d{0,5})(\d{0,4})$/, (_, ddd, inicio, fim) => `(${ddd}) ${inicio}${fim ? `-${fim}` : ''}`);
 }
 
 export default function TelaCadastro() {
@@ -57,10 +77,12 @@ export default function TelaCadastro() {
     setErros({});
     try {
       if (tipo === 'dono') {
-        const telefoneOpcional = telefoneBarbearia.trim();
+        const telefoneOpcional = digitos(telefoneBarbearia);
         const cidadeOpcional = cidade.trim();
         await api.post('/auth/cadastro/dono', {
           ...campos,
+          cpf: digitos(campos.cpf),
+          telefone: digitos(campos.telefone),
           barbearia: {
             nome: nomeBarbearia,
             data_inicio: dataInicio,
@@ -74,6 +96,8 @@ export default function TelaCadastro() {
           id_barbearia: codigoBarbearia,
           perfil,
           ...campos,
+          cpf: digitos(campos.cpf),
+          telefone: digitos(campos.telefone),
         });
         setSucesso('equipe');
       }
@@ -156,9 +180,9 @@ export default function TelaCadastro() {
               <View style={estilos.grupo}>
                 <Text style={estilos.rotuloGrupo}>Seus dados</Text>
                 <Campo rotulo="Nome completo" valor={campos.nome_completo} onChangeText={(v) => atualizar('nome_completo', v)} placeholder="Seu nome completo" erro={erros.nome_completo} />
-                <Campo rotulo="CPF" valor={campos.cpf} onChangeText={(v) => atualizar('cpf', v)} placeholder="000.000.000-00" keyboardType="numeric" erro={erros.cpf} />
+                <Campo rotulo="CPF" valor={formatarCpf(campos.cpf)} onChangeText={(v) => atualizar('cpf', digitos(v).slice(0, 11))} placeholder="000.000.000-00" keyboardType="numeric" erro={erros.cpf} />
                 <Campo rotulo="E-mail" valor={campos.email} onChangeText={(v) => atualizar('email', v)} placeholder="voce@exemplo.com" keyboardType="email-address" erro={erros.email} />
-                <Campo rotulo="Telefone" valor={campos.telefone} onChangeText={(v) => atualizar('telefone', v)} placeholder="(83) 90000-0000" keyboardType="phone-pad" erro={erros.telefone} />
+                <Campo rotulo="Telefone" valor={formatarTelefone(campos.telefone)} onChangeText={(v) => atualizar('telefone', digitos(v).slice(0, 11))} placeholder="(83) 90000-0000" keyboardType="phone-pad" erro={erros.telefone} />
                 <View style={estilos.campoSenha}>
                   <Campo rotulo="Senha" valor={campos.senha} onChangeText={(v) => atualizar('senha', v)} placeholder="Crie uma senha" secureTextEntry erro={erros.senha} />
                   <Text style={estilos.ajuda}>Use de 8 a 72 caracteres, com ao menos uma letra e um número.</Text>
@@ -169,9 +193,16 @@ export default function TelaCadastro() {
                 <View style={estilos.grupo}>
                   <Text style={estilos.rotuloGrupo}>Sua barbearia</Text>
                   <Campo rotulo="Nome da barbearia" valor={nomeBarbearia} onChangeText={(v) => { setNomeBarbearia(v); setErros((a) => ({ ...a, 'barbearia.nome': '' })); }} placeholder="Ex.: Barbearia Central" erro={erros['barbearia.nome']} />
-                  <Campo rotulo="Data de início" valor={dataInicio} onChangeText={(v) => { setDataInicio(v); setErros((a) => ({ ...a, 'barbearia.data_inicio': '' })); }} placeholder="AAAA-MM-DD" erro={erros['barbearia.data_inicio']} />
-                  <Campo rotulo="Telefone da barbearia (opcional)" valor={telefoneBarbearia} onChangeText={(v) => { setTelefoneBarbearia(v); setErros((a) => ({ ...a, 'barbearia.telefone': '' })); }} placeholder="(83) 3000-0000" keyboardType="phone-pad" erro={erros['barbearia.telefone']} />
-                  <Campo rotulo="Cidade (opcional)" valor={cidade} onChangeText={(v) => { setCidade(v); setErros((a) => ({ ...a, 'barbearia.cidade': '' })); }} placeholder="Sua cidade" erro={erros['barbearia.cidade']} />
+                  <SeletorData rotulo="Data de início" valor={dataInicio} onChange={(v) => { setDataInicio(v); setErros((a) => ({ ...a, 'barbearia.data_inicio': '' })); }} erro={erros['barbearia.data_inicio']} />
+                  <Campo rotulo="Telefone da barbearia (opcional)" valor={formatarTelefone(telefoneBarbearia)} onChangeText={(v) => { setTelefoneBarbearia(digitos(v).slice(0, 11)); setErros((a) => ({ ...a, 'barbearia.telefone': '' })); }} placeholder="(83) 3000-0000" keyboardType="phone-pad" erro={erros['barbearia.telefone']} />
+                  <SeletorMunicipio
+                    valor={cidade}
+                    onChange={(municipio) => {
+                      setCidade(municipio ? `${municipio.nome} - ${municipio.uf}` : '');
+                      setErros((a) => ({ ...a, 'barbearia.cidade': '' }));
+                    }}
+                    erro={erros['barbearia.cidade']}
+                  />
                 </View>
               ) : null}
 

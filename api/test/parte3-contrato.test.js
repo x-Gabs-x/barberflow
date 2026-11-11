@@ -36,6 +36,8 @@ const demo = require('../src/servicos/demo-parte3');
 
 test('demo: iniciar, buscar/cadastrar cliente, salvar, encerrar e comprovante', () => {
   const req = { usuario: { id: 'usuario-de-teste', perfil: 'parceiro' } };
+  assert.equal(demo.listarClientes('Renato')[0].cpf, '52998224725');
+  assert.equal(demo.listarClientes('5299')[0].nome_completo, 'Renato Barros');
   const inicio = demo.iniciar(req, '2026-11-09T13:00:00-03:00');
   assert.equal(inicio.status, 'em_andamento');
   assert.throws(() => demo.iniciar(req), /em andamento/);
