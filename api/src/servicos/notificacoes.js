@@ -21,7 +21,7 @@ async function listar(usuario, deslocamento = 0) {
   const [{ data }, { count }] = await Promise.all([
     executar(
       filtrarUsuario(supabase.from('notificacao_atendimento')
-        .select('id,atendimento_id,titulo,mensagem,criado_em,lida_em'))
+        .select('id,atendimento_id,titulo,mensagem,criado_em,lida_em,atendimento:atendimento!notificacao_atendimento_atendimento_id_fkey(inicio)'))
         .order('criado_em', { ascending: false })
         .order('id', { ascending: false })
         .range(deslocamento, deslocamento + 30)

@@ -8,7 +8,7 @@ const router = express.Router();
 const parametros = z.object({ id: idRota });
 const consulta = z.object({ deslocamento: z.coerce.number().int().min(0).default(0) }).strict();
 
-router.use(exigirPerfil('dono'));
+router.use(exigirPerfil('dono', 'parceiro', 'recepcao'));
 
 router.get('/', validar(consulta, 'query'), async (req, res) => {
   try {

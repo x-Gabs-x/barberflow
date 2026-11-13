@@ -1,22 +1,15 @@
 import { Tabs } from 'expo-router';
-import { cores } from '../../theme';
+import NavegacaoOperacional from '../../components/NavegacaoOperacional';
 
 export default function Layout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: cores.marinho },
-        headerTintColor: '#FFFFFF',
-        tabBarStyle: { backgroundColor: cores.marinho },
-        tabBarActiveTintColor: cores.dourado,
-        tabBarInactiveTintColor: '#B9C2D0',
-      }}
-    >
+    <NavegacaoOperacional perfil="dono">
       <Tabs.Screen name="agenda" options={{ title: 'Agenda' }} />
       <Tabs.Screen name="fechamento" options={{ title: 'Fechamento' }} />
       <Tabs.Screen name="equipe" options={{ title: 'Equipe' }} />
       <Tabs.Screen name="servicos" options={{ title: 'Serviços' }} />
       <Tabs.Screen name="configuracoes" options={{ title: 'Configurações' }} />
-    </Tabs>
+      <Tabs.Screen name="novo" options={{ title: 'Atendimento', href: null }} />
+    </NavegacaoOperacional>
   );
 }

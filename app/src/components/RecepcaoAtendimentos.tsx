@@ -26,13 +26,13 @@ const formas = [
   { id: 'cartao', texto: 'Cartão' },
 ] as const;
 
-export default function RecepcaoAtendimentos() {
+export default function RecepcaoAtendimentos({ atendimentoInicial, dataInicial }: { atendimentoInicial?: string; dataInicial?: string }) {
   const { width } = useWindowDimensions();
-  const [dia, setDia] = useState(dataLocal());
+  const [dia, setDia] = useState(dataInicial || dataLocal());
   const [lista, setLista] = useState<Atendimento[]>([]);
-  const [filtro, setFiltro] = useState<Filtro>('pendentes');
+  const [filtro, setFiltro] = useState<Filtro>(atendimentoInicial ? 'todos' : 'pendentes');
   const [profissional, setProfissional] = useState('todos');
-  const [selecionado, setSelecionado] = useState<string | null>(null);
+  const [selecionado, setSelecionado] = useState<string | null>(atendimentoInicial || null);
   const [editando, setEditando] = useState(false);
   const [rejeitando, setRejeitando] = useState(false);
   const [observacoes, setObservacoes] = useState('');
@@ -68,7 +68,7 @@ export default function RecepcaoAtendimentos() {
     setJustificativa('');
     setArquivo(null);
     setErrosCampo({});
-  }, [selecionado]);
+  }, [atual?.id]);
 
   const { pendentes, prontos, validados, rejeitados, valorPronto, totalValidado } = calcularIndicadoresRecepcao(lista);
   const profissionais = [...new Map(lista.map((a) => [a.barbeiro.id, a.barbeiro.nome_completo])).entries()];

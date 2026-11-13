@@ -47,5 +47,6 @@ test('pagina notificações do dono e conta todas as não lidas', async () => {
     ]);
   }
   assert.deepEqual(consultas[0].intervalo, [30, 60]);
+  assert.match(consultas[0].campos, /atendimento:atendimento!notificacao_atendimento_atendimento_id_fkey\(inicio\)/);
   assert.deepEqual(consultas[1].filtros[2], ['lida_em', null]);
 });

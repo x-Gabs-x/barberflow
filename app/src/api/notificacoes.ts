@@ -3,6 +3,7 @@ import { api } from './cliente';
 export type NotificacaoAtendimento = {
   id: string;
   atendimento_id: string;
+  atendimento?: { inicio: string } | null;
   titulo: string;
   mensagem: string;
   criado_em: string;

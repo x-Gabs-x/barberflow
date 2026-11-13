@@ -106,12 +106,13 @@ test('demo: dono consegue iniciar atendimento sem herdar atendimento aberto do p
   assert.throws(() => demo.salvar(parceiro, iniciado.id, { observacoes: 'x' }), /não encontrado/);
 });
 
-test('navegação: novo atendimento do Dono abre rota fora das abas', () => {
+test('navegação: novo atendimento do Dono mantém cabeçalho nas abas', () => {
   const fs = require('node:fs');
   const ler = (arquivo) => fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'src', arquivo), 'utf8');
-  assert.match(ler('components/AgendaParte3.tsx'), /'\/atendimento-dono'/);
-  assert.match(ler('app/atendimento-dono.tsx'), /AtendimentoParte3 perfil=\"dono\"/);
-  assert.doesNotMatch(ler('app/dono/_layout.tsx'), /name=\"novo\"/);
+  assert.match(ler('components/AgendaParte3.tsx'), /'\/dono\/novo'/);
+  assert.match(ler('app/dono/novo.tsx'), /AtendimentoParte3 perfil=\"dono\"/);
+  assert.match(ler('app/dono/_layout.tsx'), /name=\"novo\" options=\{\{ title: 'Atendimento', href: null \}\}/);
+  assert.match(ler('app/atendimento-dono.tsx'), /Redirect/);
   assert.match(ler('components/AgendaParte3.tsx'), /Ver atendimento/);
 });
 

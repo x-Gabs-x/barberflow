@@ -1,5 +1,5 @@
-import { Redirect } from 'expo-router';
+import AtendimentoParte3 from '../../components/AtendimentoParte3';
 
-export default function AtendimentoDonoLegado() {
-  return <Redirect href="/atendimento-dono" />;
+export default function AtendimentoDono() {
+  return <AtendimentoParte3 perfil="dono" />;
 }
