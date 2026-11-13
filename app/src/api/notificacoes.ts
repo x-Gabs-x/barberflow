@@ -9,7 +9,13 @@ export type NotificacaoAtendimento = {
   lida_em: string | null;
 };
 
+export type PaginaNotificacoes = {
+  notificacoes: NotificacaoAtendimento[];
+  nao_lidas: number;
+  tem_mais: boolean;
+};
+
 export const notificacoesApi = {
-  listar: () => api.get<NotificacaoAtendimento[]>('/notificacoes'),
+  listar: (deslocamento = 0) => api.get<PaginaNotificacoes>(`/notificacoes?deslocamento=${deslocamento}`),
   marcarLida: (id: string) => api.patch<{ id: string; lida_em: string }>(`/notificacoes/${encodeURIComponent(id)}/lida`, {}),
 };

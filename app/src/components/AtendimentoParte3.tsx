@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -38,8 +38,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [buscaCliente, setBuscaCliente] = useState('');
-  const [resultadosCliente, setResultadosCliente] = useState<Cliente[]>([]);
-  const [buscandoClientes, setBuscandoClientes] = useState(false);
+  const [resultadoBusca, setResultadoBusca] = useState<{ consulta: string; clientes: Cliente[]; erro?: boolean } | null>(null);
   const [cpfNovo, setCpfNovo] = useState('');
   const [nomeNovo, setNomeNovo] = useState('');
   const [telefoneNovo, setTelefoneNovo] = useState('');
@@ -53,6 +52,8 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const [aviso, setAviso] = useState('');
   const [demonstracao, setDemonstracao] = useState(false);
   const [requerLogin, setRequerLogin] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  const inicioPendente = useRef<Promise<Atendimento> | null>(null);
 
   const bloqueado = !!atendimento && atendimento.status !== 'em_andamento';
   const idBancoValido = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
@@ -61,6 +62,10 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
   const podeEditar = !!atendimento && !bloqueado;
   const valor = selecionados.reduce((total, idServico) => total + Number(servicosUsaveis.find((s) => s.id === idServico)?.preco || 0), 0);
   const agendaRota = perfil === 'dono' ? '/dono/agenda' : '/parceiro/agenda';
+  const consultaCliente = buscaCliente.trim();
+  const buscaAtual = resultadoBusca?.consulta === consultaCliente ? resultadoBusca : null;
+  const buscandoClientes = consultaCliente.length >= 2 && !buscaAtual;
+  const buscaSemResultados = consultaCliente.length >= 2 && !!buscaAtual && !buscaAtual.erro && !buscaAtual.clientes.length;
 
   const exibirErro = useCallback((erroApi: unknown, contexto?: string) => {
     setErro(contexto ? `${contexto}: ${mensagemErro(erroApi)}` : mensagemErro(erroApi));
@@ -76,49 +81,70 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
     setPagamento(a.forma_pagamento === 'cartao' ? null : a.forma_pagamento);
     setObservacoes(a.observacoes || '');
     setBuscaCliente('');
-    setResultadosCliente([]);
+    setResultadoBusca(null);
+    setNomeNovo('');
+    setCpfNovo('');
+    setTelefoneNovo('');
   }
 
   useFocusEffect(useCallback(() => {
     let ativo = true;
     setCarregando(true);
     setErro('');
-    Promise.all([
-      parte3Api.servicos(),
-      id ? parte3Api.atendimento(id) : parte3Api.agenda(),
-    ]).then(([lista, dados]) => {
+    const carregar = async () => {
+      const [lista, dados] = await Promise.all([
+        parte3Api.servicos(),
+        id ? parte3Api.atendimento(id) : parte3Api.agenda(),
+      ]);
       if (!ativo) return;
       setServicos(lista);
-      if ('atendimentos' in dados) {
-        setDemonstracao(!!dados.demonstracao);
-        if (dados.em_andamento) preencher(dados.em_andamento);
-        else setAtendimento(null);
-      } else preencher(dados);
-    }).catch((e) => { if (ativo) exibirErro(e); })
+      if (!('atendimentos' in dados)) {
+        preencher(dados);
+        return;
+      }
+      setDemonstracao(!!dados.demonstracao);
+      if (dados.em_andamento) {
+        preencher(dados.em_andamento);
+        return;
+      }
+
+      setAtendimento(null);
+      const promessa = inicioPendente.current ?? parte3Api.iniciar();
+      inicioPendente.current = promessa;
+      let novo: Atendimento;
+      try {
+        novo = await promessa;
+      } catch (e) {
+        if (!(e instanceof ErroApi && e.status === 409)) throw e;
+        const agendaAtual = await parte3Api.agenda();
+        if (!agendaAtual.em_andamento) throw e;
+        novo = agendaAtual.em_andamento;
+      } finally {
+        if (inicioPendente.current === promessa) inicioPendente.current = null;
+      }
+      if (!ativo) return;
+      preencher(novo);
+    };
+    carregar().catch((e) => { if (ativo) exibirErro(e); })
       .finally(() => { if (ativo) setCarregando(false); });
     return () => { ativo = false; };
-  }, [exibirErro, id]));
+  }, [exibirErro, id, tentativa]));
 
   useEffect(() => {
     const consulta = buscaCliente.trim();
-    if (!podeEditar || consulta.length < 2) {
-      setResultadosCliente([]);
-      setBuscandoClientes(false);
-      return;
-    }
+    if (!podeEditar || consulta.length < 2) return;
 
     let ativo = true;
     const temporizador = setTimeout(() => {
-      setBuscandoClientes(true);
       parte3Api.buscarCliente(consulta)
         .then((clientes) => {
-          if (ativo) setResultadosCliente(clientes);
+          if (ativo) setResultadoBusca({ consulta, clientes });
         })
         .catch((e) => {
-          if (ativo) exibirErro(e);
-        })
-        .finally(() => {
-          if (ativo) setBuscandoClientes(false);
+          if (ativo) {
+            setResultadoBusca({ consulta, clientes: [], erro: true });
+            exibirErro(e);
+          }
         });
     }, 250);
     return () => {
@@ -127,22 +153,24 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
     };
   }, [buscaCliente, exibirErro, podeEditar]);
 
-  async function iniciar() {
-    if (salvando) return;
-    setSalvando(true); setErro(''); setAviso('');
-    try {
-      const a = await parte3Api.iniciar();
-      preencher(a);
-      router.setParams({ id: a.id });
-      setAviso('Atendimento iniciado. Informe o cliente e os serviços.');
-    } catch (e) { exibirErro(e); }
-    finally { setSalvando(false); }
+  function alterarBuscaCliente(texto: string) {
+    setBuscaCliente(texto);
+    setResultadoBusca(null);
+    const consulta = texto.trim();
+    if (/^[\d.\-\s]+$/.test(consulta)) {
+      setCpfNovo(consulta.replace(/\D/g, '').slice(0, 11));
+      setNomeNovo('');
+    } else {
+      setNomeNovo(consulta);
+      setCpfNovo('');
+    }
+    setTelefoneNovo('');
   }
 
   function selecionarCliente(selecionado: Cliente) {
     setCliente(selecionado);
     setBuscaCliente('');
-    setResultadosCliente([]);
+    setResultadoBusca(null);
     setErro('');
     setAviso(`Cliente selecionado: ${selecionado.nome_completo}`);
   }
@@ -200,7 +228,8 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
 
   async function enviarArquivo(idAtendimento: string) {
     if (!arquivo) return;
-    await enviarComprovante(idAtendimento, arquivo.arquivo, arquivo.tipo);
+    const comprovante = await enviarComprovante(idAtendimento, arquivo.arquivo, arquivo.tipo);
+    setAtendimento((atual) => atual?.id === idAtendimento ? { ...atual, ...comprovante } : atual);
     setArquivo(null);
   }
 
@@ -249,14 +278,9 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
       {aviso ? <Text style={estilos.aviso}>{aviso}</Text> : null}
       {carregando ? <ActivityIndicator color={cores.dourado} size="large" /> : null}
 
-      {!carregando && !atendimento ? (
-        <Card>
-          <Text style={estilos.secao}>Pronto para iniciar?</Text>
-          <Text style={estilos.suave}>O horário de início será registrado agora. Você poderá salvar o atendimento parcialmente antes de encerrá-lo.</Text>
-          <Botao titulo={salvando ? 'Iniciando…' : 'Iniciar atendimento'} onPress={iniciar} desabilitado={salvando} />
-          <Botao titulo="Voltar para agenda" variante="secundario" onPress={() => router.replace(agendaRota)} />
-        </Card>
-      ) : null}
+      {!carregando && !atendimento && erro && !requerLogin
+        ? <Botao titulo="Tentar novamente" onPress={() => setTentativa((atual) => atual + 1)} />
+        : null}
 
       {atendimento ? (
         <>
@@ -280,14 +304,14 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
                 <Campo
                   rotulo="Buscar cliente por nome ou CPF"
                   valor={buscaCliente}
-                  onChangeText={setBuscaCliente}
+                  onChangeText={alterarBuscaCliente}
                   placeholder="Digite o nome ou CPF"
                   autoCapitalize="words"
                 />
                 {buscandoClientes ? <ActivityIndicator color={cores.dourado} /> : null}
-                {resultadosCliente.length > 0 ? (
+                {buscaAtual && buscaAtual.clientes.length > 0 ? (
                   <View style={estilos.dropdown}>
-                    {resultadosCliente.map((resultado) => (
+                    {buscaAtual.clientes.map((resultado) => (
                       <Pressable
                         key={resultado.id}
                         accessibilityRole="button"
@@ -300,12 +324,9 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
                     ))}
                   </View>
                 ) : null}
-                {buscaCliente.trim().length >= 2 && !buscandoClientes && !resultadosCliente.length
-                  ? <Text style={estilos.suave}>Nenhum cliente encontrado. Você pode cadastrá-lo abaixo.</Text>
-                  : null}
-                <View style={estilos.grupo}>
+                {buscaSemResultados ? <View style={estilos.grupo}>
                   <Text style={estilos.rotulo}>NOVO CLIENTE</Text>
-                  <Text style={estilos.suave}>Cadastre os dados abaixo para vincular um novo cliente ao atendimento.</Text>
+                  <Text style={estilos.suave}>Nenhum cliente encontrado. Preencha os dados para cadastrá-lo e vinculá-lo ao atendimento.</Text>
                   <Campo
                     rotulo="Nome completo"
                     valor={nomeNovo}
@@ -328,7 +349,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
                     keyboardType="phone-pad"
                   />
                   <Botao titulo="Cadastrar cliente e vincular ao atendimento" onPress={cadastrarCliente} desabilitado={salvando} />
-                </View>
+                </View> : null}
               </>
             ) : null}
           </Card>
@@ -370,8 +391,8 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
             <Text style={estilos.secao}>04  ·  Comprovante</Text>
             <Text style={estilos.suave}>JPG, PNG ou PDF até 6 MB. O comprovante fica protegido no Supabase Storage e é necessário para a recepção validar o atendimento.</Text>
             <View style={estilos.selecionado}>
-              <Text style={atendimento.comprovante_anexado ? estilos.sucessoTexto : estilos.avisoTexto}>
-                {atendimento.comprovante_anexado ? '✓ Comprovante anexado' : 'Sem comprovante enviado'}
+              <Text style={atendimento.comprovante_anexado && !arquivo ? estilos.sucessoTexto : estilos.avisoTexto}>
+                {arquivo ? 'Comprovante selecionado, aguardando envio' : atendimento.comprovante_anexado ? '✓ Comprovante anexado' : 'Sem comprovante enviado'}
               </Text>
               {atendimento.comprovante_url ? <Pressable onPress={() => Linking.openURL(atendimento.comprovante_url!)}><Text style={estilos.link}>Visualizar comprovante ↗</Text></Pressable> : null}
             </View>
@@ -393,7 +414,7 @@ export default function AtendimentoParte3({ perfil }: { perfil: Perfil }) {
           ) : (
             <View style={estilos.acoes}>
               {erro ? <Text accessibilityRole="alert" style={estilos.erro}>{erro}</Text> : null}
-              <Text style={estilos.suave}>Ao encerrar, o atendimento será enviado para a recepção. Sem comprovante, ele poderá ser registrado, mas não validado.</Text>
+              <Text style={estilos.suave}>Ao encerrar, o atendimento será enviado para a recepção. {arquivo ? 'O comprovante selecionado será enviado antes do encerramento.' : atendimento.comprovante_anexado ? 'O comprovante já está anexado.' : 'Sem comprovante, ele poderá ser registrado, mas não validado.'}</Text>
               <Botao titulo={salvando ? 'Encerrando…' : 'Encerrar atendimento'} onPress={encerrarAtendimento} desabilitado={salvando} />
             </View>
           )}

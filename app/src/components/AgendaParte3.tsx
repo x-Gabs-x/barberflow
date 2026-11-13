@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import Botao from './Botao';
 import Card from './Card';
 import { cores, raio } from '../theme';
@@ -8,15 +9,32 @@ import { NotificacaoAtendimento, notificacoesApi } from '../api/notificacoes';
 import { AgendaDia, MembroEquipe, Perfil, dataLocal, diaPorExtenso, dinheiro, horaLocal, mensagemErro, mudarDia, parte3Api, statusNome } from '../api/parte3';
 
 type Props = { perfil: Perfil };
+const DURACAO_NOTIFICACAO = 5 * 60 * 1000;
+
+function dataHoraNotificacao(data: string) {
+  const instante = new Date(data);
+  if (Number.isNaN(instante.getTime())) return 'Data indisponível';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza',
+  }).format(instante);
+}
 
 export default function AgendaParte3({ perfil }: Props) {
   const router = useRouter();
+  const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [dia, setDia] = useState(dataLocal());
   const [agenda, setAgenda] = useState<AgendaDia | null>(null);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
   const [notificacoes, setNotificacoes] = useState<NotificacaoAtendimento[]>([]);
+  const [naoLidas, setNaoLidas] = useState(0);
+  const [deslocamentoNotificacoes, setDeslocamentoNotificacoes] = useState(0);
+  const [temMaisNotificacoes, setTemMaisNotificacoes] = useState(false);
+  const [carregandoMaisNotificacoes, setCarregandoMaisNotificacoes] = useState(false);
   const [erroNotificacoes, setErroNotificacoes] = useState('');
+  const [painelNotificacoesAberto, setPainelNotificacoesAberto] = useState(false);
+  const [agora, setAgora] = useState(0);
   const [filtro, setFiltro] = useState('todos');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -36,13 +54,22 @@ export default function AgendaParte3({ perfil }: Props) {
         setEquipe(membros);
         if (perfil === 'dono' && !dados.demonstracao) {
           try {
-            setNotificacoes(await notificacoesApi.listar());
-            setErroNotificacoes('');
+            const pagina = await notificacoesApi.listar();
+            if (ativo) {
+              setNotificacoes(pagina.notificacoes);
+              setNaoLidas(pagina.nao_lidas);
+              setDeslocamentoNotificacoes(pagina.notificacoes.length);
+              setTemMaisNotificacoes(pagina.tem_mais);
+              setAgora(Date.now());
+              setErroNotificacoes('');
+            }
           } catch (e) {
-            setErroNotificacoes(mensagemErro(e));
+            if (ativo) setErroNotificacoes(mensagemErro(e));
           }
         } else {
           setNotificacoes([]);
+          setNaoLidas(0);
+          setTemMaisNotificacoes(false);
           setErroNotificacoes('');
         }
       })
@@ -56,9 +83,19 @@ export default function AgendaParte3({ perfil }: Props) {
     let ativo = true;
     const atualizar = async () => {
       try {
-        const dados = await notificacoesApi.listar();
+        const pagina = await notificacoesApi.listar();
         if (ativo) {
-          setNotificacoes(dados);
+          setNotificacoes((anteriores) => {
+            if (!painelNotificacoesAberto) return pagina.notificacoes;
+            const ids = new Set(pagina.notificacoes.map((n) => n.id));
+            return [...pagina.notificacoes, ...anteriores.filter((n) => !ids.has(n.id))];
+          });
+          setNaoLidas(pagina.nao_lidas);
+          if (!painelNotificacoesAberto) {
+            setDeslocamentoNotificacoes(pagina.notificacoes.length);
+            setTemMaisNotificacoes(pagina.tem_mais);
+          }
+          setAgora(Date.now());
           setErroNotificacoes('');
         }
       } catch (e) {
@@ -70,7 +107,41 @@ export default function AgendaParte3({ perfil }: Props) {
       ativo = false;
       clearInterval(intervalo);
     };
-  }, [agenda?.demonstracao, perfil]));
+  }, [agenda?.demonstracao, painelNotificacoesAberto, perfil]));
+
+  const recentes = notificacoes.filter((n) => {
+    const idade = agora - new Date(n.criado_em).getTime();
+    return !n.lida_em && idade >= 0 && idade < DURACAO_NOTIFICACAO;
+  });
+
+  useEffect(() => {
+    if (perfil !== 'dono') return;
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Notificações, ${naoLidas} não lidas`}
+          accessibilityState={{ expanded: painelNotificacoesAberto }}
+          onPress={() => setPainelNotificacoesAberto((aberto) => !aberto)}
+          style={[estilos.sino, naoLidas > 0 && estilos.sinoDestacado]}
+        >
+          <SymbolView name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }} size={23} tintColor={naoLidas > 0 ? cores.marinho : cores.branco} fallback={<Text style={estilos.sinoFallback}>🔔</Text>} />
+          {naoLidas > 0 ? <View style={estilos.sinoContador}><Text style={estilos.sinoContadorTexto}>{naoLidas > 99 ? '99+' : naoLidas}</Text></View> : null}
+        </Pressable>
+      ),
+    });
+  }, [navigation, naoLidas, painelNotificacoesAberto, perfil]);
+
+  useEffect(() => {
+    const proximaExpiracao = notificacoes
+      .filter((n) => !n.lida_em)
+      .map((n) => new Date(n.criado_em).getTime() + DURACAO_NOTIFICACAO)
+      .filter((expiracao) => expiracao > agora)
+      .sort((a, b) => a - b)[0];
+    if (!proximaExpiracao) return;
+    const temporizador = setTimeout(() => setAgora(Date.now()), Math.max(1, proximaExpiracao - Date.now() + 10));
+    return () => clearTimeout(temporizador);
+  }, [agora, notificacoes]);
 
   const todos = agenda?.atendimentos || [];
   const filtrados = filtro === 'todos' ? todos : todos.filter((a) => a.barbeiro.id === filtro);
@@ -84,10 +155,12 @@ export default function AgendaParte3({ perfil }: Props) {
   const abrir = (id?: string) => router.push({ pathname: perfil === 'dono' ? '/atendimento-dono' : '/parceiro/novo', params: id ? { id } : {} });
 
   async function abrirNotificacao(notificacao: NotificacaoAtendimento) {
+    setPainelNotificacoesAberto(false);
     if (!notificacao.lida_em) {
       try {
         const atualizada = await notificacoesApi.marcarLida(notificacao.id);
         setNotificacoes((anteriores) => anteriores.map((item) => item.id === atualizada.id ? { ...item, lida_em: atualizada.lida_em } : item));
+        setNaoLidas((total) => Math.max(0, total - 1));
         setErroNotificacoes('');
       } catch (e) {
         setErroNotificacoes(mensagemErro(e));
@@ -96,8 +169,48 @@ export default function AgendaParte3({ perfil }: Props) {
     abrir(notificacao.atendimento_id);
   }
 
+  async function carregarMaisNotificacoes() {
+    if (!temMaisNotificacoes || carregandoMaisNotificacoes) return;
+    setCarregandoMaisNotificacoes(true);
+    try {
+      const pagina = await notificacoesApi.listar(deslocamentoNotificacoes);
+      setNotificacoes((anteriores) => {
+        const ids = new Set(anteriores.map((n) => n.id));
+        return [...anteriores, ...pagina.notificacoes.filter((n) => !ids.has(n.id))];
+      });
+      setDeslocamentoNotificacoes((atual) => atual + pagina.notificacoes.length);
+      setTemMaisNotificacoes(pagina.tem_mais);
+      setNaoLidas(pagina.nao_lidas);
+      setErroNotificacoes('');
+    } catch (e) {
+      setErroNotificacoes(mensagemErro(e));
+    } finally {
+      setCarregandoMaisNotificacoes(false);
+    }
+  }
+
+  function itemNotificacao(notificacao: NotificacaoAtendimento) {
+    return (
+      <Pressable
+        key={notificacao.id}
+        accessibilityRole="button"
+        accessibilityLabel={`${notificacao.titulo}, ${dataHoraNotificacao(notificacao.criado_em)}. Ver atendimento`}
+        onPress={() => abrirNotificacao(notificacao)}
+        style={[estilos.notificacao, !notificacao.lida_em && estilos.notificacaoNova]}
+      >
+        <View style={estilos.notificacaoCabecalho}>
+          <Text style={estilos.notificacaoTitulo}>{notificacao.titulo}</Text>
+          <Text style={estilos.notificacaoData}>{dataHoraNotificacao(notificacao.criado_em)}</Text>
+        </View>
+        <Text style={estilos.suave}>{notificacao.mensagem}</Text>
+        <Text style={estilos.link}>Ver atendimento →</Text>
+      </Pressable>
+    );
+  }
+
   return (
-    <ScrollView style={estilos.fundo} contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
+    <View style={estilos.fundo}>
+    <ScrollView style={estilos.rolagem} contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
       <View style={estilos.cabecalho}>
         <View style={{ flex: 1, gap: 5 }}>
           <Text style={estilos.marca}>BARBERFLOW  /  OPERAÇÃO</Text>
@@ -111,25 +224,6 @@ export default function AgendaParte3({ perfil }: Props) {
 
       {agenda?.demonstracao ? <Text style={estilos.demo}>AMBIENTE DE TESTE · Os atendimentos ficam somente na memória e não são gravados no Supabase.</Text> : null}
       {erro ? <Text accessibilityRole="alert" style={estilos.erro}>{erro}</Text> : null}
-      {perfil === 'dono' && !agenda?.demonstracao ? (
-        <Card>
-          <View style={estilos.linha}>
-            <Text style={estilos.secao}>Notificações de encerramento</Text>
-            <Text style={estilos.contadorNotificacoes}>{notificacoes.filter((n) => !n.lida_em).length} novas</Text>
-          </View>
-          {erroNotificacoes ? <Text accessibilityRole="alert" style={estilos.erro}>{erroNotificacoes}</Text> : null}
-          {!erroNotificacoes && !notificacoes.length ? <Text style={estilos.suave}>Nenhum atendimento encerrado recentemente.</Text> : null}
-          {notificacoes.map((notificacao) => (
-            <View key={notificacao.id} style={[estilos.notificacao, !notificacao.lida_em && estilos.notificacaoNova]}>
-              <Text style={estilos.notificacaoTitulo}>{notificacao.titulo}{!notificacao.lida_em ? ' · Nova' : ''}</Text>
-              <Text style={estilos.suave}>{notificacao.mensagem}</Text>
-              <Pressable accessibilityRole="button" onPress={() => abrirNotificacao(notificacao)}>
-                <Text style={estilos.link}>Ver atendimento →</Text>
-              </Pressable>
-            </View>
-          ))}
-        </Card>
-      ) : null}
       <Card>
         <View style={estilos.linha}>
           <Pressable accessibilityRole="button" accessibilityLabel="Dia anterior" style={estilos.mudarDia} onPress={() => setDia(mudarDia(dia, -1))}><Text style={estilos.botaoSeta}>‹</Text></Pressable>
@@ -201,11 +295,41 @@ export default function AgendaParte3({ perfil }: Props) {
         </Card>
       ))}
     </ScrollView>
+    {perfil === 'dono' && !agenda?.demonstracao && (painelNotificacoesAberto || recentes.length > 0) ? (
+      <View style={[estilos.flutuante, { width: Math.min(width - 32, 410) }]}>
+        {painelNotificacoesAberto ? (
+          <View style={estilos.painelNotificacoes}>
+            <View style={estilos.linha}>
+              <Text style={estilos.secao}>Notificações</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Fechar notificações" onPress={() => setPainelNotificacoesAberto(false)}>
+                <Text style={estilos.fecharPainel}>×</Text>
+              </Pressable>
+            </View>
+            <Text style={estilos.suave}>{naoLidas} não lidas</Text>
+            {erroNotificacoes ? <Text accessibilityRole="alert" style={estilos.erro}>{erroNotificacoes}</Text> : null}
+            {!erroNotificacoes && !notificacoes.length ? <Text style={estilos.suave}>Nenhuma notificação.</Text> : null}
+            <ScrollView style={estilos.listaNotificacoes} nestedScrollEnabled>{notificacoes.map(itemNotificacao)}</ScrollView>
+            {temMaisNotificacoes ? (
+              <Pressable accessibilityRole="button" disabled={carregandoMaisNotificacoes} onPress={carregarMaisNotificacoes}>
+                <Text style={estilos.link}>{carregandoMaisNotificacoes ? 'Carregando…' : 'Carregar mais notificações'}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <View style={estilos.painelNotificacoes}>
+            <Text style={estilos.rotulo}>Notificações recentes</Text>
+            <ScrollView style={estilos.listaRecentes} nestedScrollEnabled>{recentes.map(itemNotificacao)}</ScrollView>
+          </View>
+        )}
+      </View>
+    ) : null}
+    </View>
   );
 }
 
 const estilos = StyleSheet.create({
   fundo: { flex: 1, backgroundColor: cores.fundo },
+  rolagem: { flex: 1 },
   pagina: { width: '100%', maxWidth: 1080, alignSelf: 'center', padding: 20, gap: 18, paddingBottom: 48 },
   cabecalho: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 16, paddingVertical: 8 },
   marca: { color: cores.dourado, letterSpacing: 2, fontSize: 11, fontWeight: '800' },
@@ -237,8 +361,19 @@ const estilos = StyleSheet.create({
   rodape: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderTopColor: cores.borda, borderTopWidth: 1, paddingTop: 10 },
   erro: { color: cores.erro, backgroundColor: cores.erroFundo, padding: 12, borderRadius: raio.campo },
   demo: { color: cores.aviso, backgroundColor: cores.avisoFundo, padding: 12, borderRadius: raio.campo },
-  contadorNotificacoes: { color: cores.dourado, fontWeight: '700', fontSize: 13 },
-  notificacao: { borderTopColor: cores.borda, borderTopWidth: 1, paddingTop: 12, marginTop: 12, gap: 7 },
+  sino: { width: 44, height: 40, marginRight: 16, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  sinoDestacado: { backgroundColor: cores.dourado },
+  sinoFallback: { fontSize: 22, color: cores.branco },
+  sinoContador: { position: 'absolute', top: -5, right: -7, minWidth: 20, height: 20, paddingHorizontal: 4, borderRadius: 10, backgroundColor: cores.erro, alignItems: 'center', justifyContent: 'center' },
+  sinoContadorTexto: { color: cores.branco, fontSize: 11, fontWeight: '800' },
+  flutuante: { position: 'absolute', top: 8, right: 16, zIndex: 10 },
+  painelNotificacoes: { backgroundColor: cores.branco, borderColor: cores.borda, borderWidth: 1, borderRadius: raio.card, padding: 14, gap: 5, elevation: 8 },
+  listaNotificacoes: { maxHeight: 420 },
+  listaRecentes: { maxHeight: 260 },
+  fecharPainel: { color: cores.marinho, fontSize: 26, fontWeight: '600', paddingHorizontal: 8 },
+  notificacao: { borderTopColor: cores.borda, borderTopWidth: 1, paddingTop: 10, marginTop: 8, gap: 5 },
   notificacaoNova: { borderLeftWidth: 3, borderLeftColor: cores.dourado, paddingLeft: 10 },
-  notificacaoTitulo: { color: cores.marinho, fontSize: 15, fontWeight: '700' },
+  notificacaoCabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' },
+  notificacaoTitulo: { color: cores.marinho, fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  notificacaoData: { color: cores.textoSuave, fontSize: 11 },
 });

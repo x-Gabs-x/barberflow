@@ -2,7 +2,8 @@ const supabase = require('../supabase');
 const parte3 = require('./parte3');
 
 async function executar(consulta) {
-  const { data, error } = await consulta;
+  const resposta = await consulta;
+  const { error } = resposta;
   if (error) {
     if (error.code === 'PGRST205' || error.code === '42P01') {
       console.error('Notificações / migração pendente:', error);
@@ -10,23 +11,30 @@ async function executar(consulta) {
     }
     parte3.conferirBanco(error);
   }
-  return data;
+  return resposta;
 }
 
-async function listar(usuario) {
-  const data = await executar(
-    supabase.from('notificacao_atendimento')
-      .select('id,atendimento_id,titulo,mensagem,criado_em,lida_em')
-      .eq('estabelecimento_id', usuario.estabelecimento_id)
-      .eq('usuario_id', usuario.id)
-      .order('criado_em', { ascending: false })
-      .limit(30)
-  );
-  return data || [];
+async function listar(usuario, deslocamento = 0) {
+  const filtrarUsuario = (consulta) => consulta
+    .eq('estabelecimento_id', usuario.estabelecimento_id)
+    .eq('usuario_id', usuario.id);
+  const [{ data }, { count }] = await Promise.all([
+    executar(
+      filtrarUsuario(supabase.from('notificacao_atendimento')
+        .select('id,atendimento_id,titulo,mensagem,criado_em,lida_em'))
+        .order('criado_em', { ascending: false })
+        .order('id', { ascending: false })
+        .range(deslocamento, deslocamento + 30)
+    ),
+    executar(filtrarUsuario(supabase.from('notificacao_atendimento')
+      .select('id', { count: 'exact', head: true })).is('lida_em', null)),
+  ]);
+  const lista = data || [];
+  return { notificacoes: lista.slice(0, 30), nao_lidas: count || 0, tem_mais: lista.length > 30 };
 }
 
 async function marcarLida(usuario, id) {
-  const data = await executar(
+  const { data } = await executar(
     supabase.from('notificacao_atendimento')
       .update({ lida_em: new Date().toISOString() })
       .eq('id', id)
