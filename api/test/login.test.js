@@ -224,6 +224,14 @@ test('JWT retornado pode ser verificado pelo middleware e selecionar a barbearia
   assert.equal(proximo, true);
   assert.equal(tokenVerificado, TOKEN);
   assert.deepEqual(req.usuario, { id: ID, perfil: 'parceiro', estabelecimento_id: 'b2', escote_percentual: 40 });
+
+  const reqInvalida = { headers: { authorization: `Bearer ${TOKEN}`, 'x-barbearia': 'barbearia-sem-vinculo' } };
+  const resInvalida = { status(codigo) { this.statusCode = codigo; return this; }, json(corpo) { this.body = corpo; return this; } };
+  let liberada = false;
+  await autenticarMockado(reqInvalida, resInvalida, () => { liberada = true; });
+  assert.equal(liberada, false);
+  assert.equal(resInvalida.statusCode, 403);
+  assert.equal(resInvalida.body.erro, 'barbearia_invalida');
 });
 
 test('middleware não expõe erros internos do Auth ou PostgreSQL ao validar a sessão', async () => {

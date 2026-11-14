@@ -1,10 +1,11 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { Redirect, Tabs, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { NotificacaoAtendimento, notificacoesApi } from '../api/notificacoes';
 import { dataLocal, mensagemErro } from '../api/parte3';
 import { cores, raio } from '../theme';
+import { rotaDoPerfil, useSessao } from '../context/SessaoContext';
 
 type Perfil = 'dono' | 'parceiro' | 'recepcao';
 const DURACAO_NOTIFICACAO = 5 * 60 * 1000;
@@ -19,7 +20,15 @@ function dataHoraNotificacao(data: string) {
 }
 
 export default function NavegacaoOperacional({ perfil, children }: { perfil: Perfil; children: ReactNode }) {
+  const sessao = useSessao();
+  if (sessao.situacao !== 'autenticada' || !sessao.perfil) return <Redirect href="/acesso/login" />;
+  if (sessao.perfil !== perfil) return <Redirect href={rotaDoPerfil(sessao.perfil)} />;
+  return <NavegacaoAutenticada perfil={perfil}>{children}</NavegacaoAutenticada>;
+}
+
+function NavegacaoAutenticada({ perfil, children }: { perfil: Perfil; children: ReactNode }) {
   const router = useRouter();
+  const { sair } = useSessao();
   const { width } = useWindowDimensions();
   const [notificacoes, setNotificacoes] = useState<NotificacaoAtendimento[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
@@ -78,6 +87,11 @@ export default function NavegacaoOperacional({ perfil, children }: { perfil: Per
 
   function novoAtendimento() {
     router.navigate(perfil === 'dono' ? '/dono/novo' : '/parceiro/novo');
+  }
+
+  async function encerrarSessao() {
+    await sair();
+    router.replace('/acesso/login');
   }
 
   async function abrirNotificacao(notificacao: NotificacaoAtendimento) {
@@ -158,7 +172,7 @@ export default function NavegacaoOperacional({ perfil, children }: { perfil: Per
             <View style={estilos.acoesCabecalho}>
               {perfil !== 'recepcao' ? (
                 <Pressable accessibilityRole="button" accessibilityLabel="Novo atendimento" onPress={novoAtendimento} style={[estilos.botaoNovo, width < 400 && estilos.botaoNovoCompacto]}>
-                  <Text style={[estilos.botaoNovoTexto, width < 400 && estilos.botaoNovoTextoCompacto]} numberOfLines={1}>+ Novo atendimento</Text>
+                  <Text style={[estilos.botaoNovoTexto, width < 400 && estilos.botaoNovoTextoCompacto]} numberOfLines={1}>{width < 400 ? '+ Novo' : '+ Novo atendimento'}</Text>
                 </Pressable>
               ) : null}
               <Pressable
@@ -170,6 +184,14 @@ export default function NavegacaoOperacional({ perfil, children }: { perfil: Per
               >
                 <SymbolView name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }} size={23} tintColor={naoLidas > 0 ? cores.marinho : cores.branco} fallback={<Text style={estilos.sinoFallback}>🔔</Text>} />
                 {naoLidas > 0 ? <View style={estilos.sinoContador}><Text style={estilos.sinoContadorTexto}>{naoLidas > 99 ? '99+' : naoLidas}</Text></View> : null}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sair da conta"
+                onPress={() => { void encerrarSessao(); }}
+                style={estilos.botaoSair}
+              >
+                <Text style={estilos.botaoSairTexto}>Sair</Text>
               </Pressable>
             </View>
           ),
@@ -217,6 +239,8 @@ const estilos = StyleSheet.create({
   botaoNovoTexto: { color: cores.marinho, fontSize: 13, fontWeight: '700' },
   botaoNovoTextoCompacto: { fontSize: 11 },
   sino: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  botaoSair: { minHeight: 40, minWidth: 48, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderRadius: raio.botao, borderWidth: 1, borderColor: cores.dourado },
+  botaoSairTexto: { color: cores.branco, fontSize: 13, fontWeight: '700' },
   sinoDestacado: { backgroundColor: cores.dourado },
   sinoFallback: { fontSize: 22, color: cores.branco },
   sinoContador: { position: 'absolute', top: -5, right: -7, minWidth: 20, height: 20, paddingHorizontal: 4, borderRadius: 10, backgroundColor: cores.erro, alignItems: 'center', justifyContent: 'center' },

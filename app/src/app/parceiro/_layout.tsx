@@ -5,7 +5,7 @@ export default function Layout() {
   return (
     <NavegacaoOperacional perfil="parceiro">
       <Tabs.Screen name="agenda" options={{ title: 'Agenda' }} />
-      <Tabs.Screen name="novo" options={{ title: 'Atendimento', href: null }} />
+      <Tabs.Screen name="novo" options={{ title: 'Atendimento', tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
     </NavegacaoOperacional>
   );
 }

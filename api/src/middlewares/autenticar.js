@@ -32,7 +32,12 @@ async function autenticar(req, res, next) {
     }
 
     const escolhida = req.headers['x-barbearia'];
-    const vinculo = vinculos.find((v) => v.estabelecimento_id === escolhida) || vinculos[0];
+    const vinculo = escolhida
+      ? vinculos.find((v) => v.estabelecimento_id === escolhida)
+      : vinculos[0];
+    if (!vinculo) {
+      return res.status(403).json({ erro: 'barbearia_invalida', mensagem: 'Você não tem acesso a esta barbearia.' });
+    }
 
     req.usuario = {
       id: data.user.id,

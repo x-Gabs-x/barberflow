@@ -9,7 +9,7 @@ export default function Layout() {
       <Tabs.Screen name="equipe" options={{ title: 'Equipe' }} />
       <Tabs.Screen name="servicos" options={{ title: 'Serviços' }} />
       <Tabs.Screen name="configuracoes" options={{ title: 'Configurações' }} />
-      <Tabs.Screen name="novo" options={{ title: 'Atendimento', href: null }} />
+      <Tabs.Screen name="novo" options={{ title: 'Atendimento', tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
     </NavegacaoOperacional>
   );
 }

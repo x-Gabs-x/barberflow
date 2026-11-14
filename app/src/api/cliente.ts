@@ -15,9 +15,14 @@ type Sessao = {
 };
 
 const sessao: Sessao = { token: null, perfilDeTeste: null, barbearia: null };
+let aoInvalidarSessao: (() => void) | null = null;
 
 export function definirSessao(novos: Partial<Sessao>) {
   Object.assign(sessao, novos);
+}
+
+export function registrarSessaoInvalida(acao: (() => void) | null) {
+  aoInvalidarSessao = acao;
 }
 
 export type CampoComErro = { campo: string; mensagem: string };
@@ -46,7 +51,8 @@ export function errosPorCampo(erro: unknown): Record<string, string> {
 
 async function chamar<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
   const cabecalhos: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (sessao.token) cabecalhos.Authorization = `Bearer ${sessao.token}`;
+  const tokenEnviado = sessao.token;
+  if (tokenEnviado) cabecalhos.Authorization = `Bearer ${tokenEnviado}`;
   if (sessao.perfilDeTeste) cabecalhos['x-dev-perfil'] = sessao.perfilDeTeste;
   if (sessao.barbearia) cabecalhos['x-barbearia'] = sessao.barbearia;
 
@@ -59,6 +65,10 @@ async function chamar<T>(metodo: string, caminho: string, corpo?: unknown): Prom
   const dados = await resposta.json().catch(() => null);
 
   if (!resposta.ok) {
+    if (tokenEnviado && tokenEnviado === sessao.token &&
+      (resposta.status === 401 || (resposta.status === 403 && ['sem_vinculo', 'barbearia_invalida'].includes(dados?.erro)))) {
+      aoInvalidarSessao?.();
+    }
     const campos: CampoComErro[] = Array.isArray(dados?.campos) ? dados.campos : [];
     throw new ErroApi(
       resposta.status,
@@ -78,13 +88,18 @@ export const api = {
 };
 export async function enviarComprovante(id: string, arquivo: Blob, mime: string) {
   const cabecalhos: Record<string, string> = { 'Content-Type': mime };
-  if (sessao.token) cabecalhos.Authorization = `Bearer ${sessao.token}`;
+  const tokenEnviado = sessao.token;
+  if (tokenEnviado) cabecalhos.Authorization = `Bearer ${tokenEnviado}`;
   if (sessao.perfilDeTeste) cabecalhos['x-dev-perfil'] = sessao.perfilDeTeste;
   if (sessao.barbearia) cabecalhos['x-barbearia'] = sessao.barbearia;
   const resposta = await fetch(`${URL_API}/atendimentos/${encodeURIComponent(id)}/comprovante`, {
     method: 'POST', headers: cabecalhos, body: arquivo,
   });
   const dados = await resposta.json().catch(() => null);
+  if (tokenEnviado && tokenEnviado === sessao.token &&
+    (resposta.status === 401 || (resposta.status === 403 && ['sem_vinculo', 'barbearia_invalida'].includes(dados?.erro)))) {
+    aoInvalidarSessao?.();
+  }
   if (!resposta.ok) throw new ErroApi(resposta.status, dados?.erro ?? 'arquivo_invalido', dados?.mensagem ?? 'Não foi possível enviar o comprovante.');
   return dados as { comprovante_url: string | null; comprovante_anexado: boolean };
 }

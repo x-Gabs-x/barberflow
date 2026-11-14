@@ -1,26 +1,18 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import Botao from '../../components/Botao';
 import Campo from '../../components/Campo';
-import { api, definirSessao, ErroApi, errosPorCampo } from '../../api/cliente';
+import { api, ErroApi, errosPorCampo } from '../../api/cliente';
+import { Perfil, rotaDoPerfil, useSessao } from '../../context/SessaoContext';
 import { cores, raio } from '../../theme';
 
-type Perfil = 'dono' | 'parceiro' | 'recepcao';
 type Barbearia = { id: string; nome: string; perfil: Perfil };
 type RespostaLogin = {
   token: string;
   usuario: { id: string; nome_completo: string; perfil: Perfil };
   barbearias: Barbearia[];
 };
-
-function rotaDoPerfil(perfil: Perfil) {
-  switch (perfil) {
-    case 'dono': return '/dono/agenda';
-    case 'parceiro': return '/parceiro/agenda';
-    case 'recepcao': return '/recepcao/atendimentos';
-  }
-}
 
 function mensagemDoErro(erro: unknown) {
   if (!(erro instanceof ErroApi)) return 'Não foi possível acessar a API. Verifique sua conexão e tente novamente.';
@@ -30,6 +22,7 @@ function mensagemDoErro(erro: unknown) {
 
 export default function TelaLogin() {
   const router = useRouter();
+  const { entrar: guardarSessao, sair, situacao, perfil } = useSessao();
   const [cpf, setCpf] = useState('');
   const [senha, setSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
@@ -44,16 +37,15 @@ export default function TelaLogin() {
     setErros({});
     setResposta(null);
     // Login é público: não envie ao endpoint uma sessão de teste ou anterior.
-    definirSessao({ token: null, perfilDeTeste: null, barbearia: null });
     try {
+      await sair();
       const dados = await api.post<RespostaLogin>('/auth/login', { cpf, senha });
       if (!dados.barbearias?.length) {
         setMensagemErro('Sua conta não possui uma barbearia ativa para acessar.');
         return;
       }
-      definirSessao({ token: dados.token, perfilDeTeste: null, barbearia: null });
       if (dados.barbearias.length === 1) {
-        selecionarBarbearia(dados, dados.barbearias[0]);
+        await selecionarBarbearia(dados, dados.barbearias[0]);
       } else {
         setResposta(dados);
       }
@@ -65,10 +57,19 @@ export default function TelaLogin() {
     }
   }
 
-  function selecionarBarbearia(dados: RespostaLogin, barbearia: Barbearia) {
-    definirSessao({ token: dados.token, perfilDeTeste: null, barbearia: barbearia.id });
-    router.replace(rotaDoPerfil(barbearia.perfil));
+  async function selecionarBarbearia(dados: RespostaLogin, barbearia: Barbearia) {
+    try {
+      setCarregando(true);
+      await guardarSessao(dados.token, barbearia.id, barbearia.perfil);
+      router.replace(rotaDoPerfil(barbearia.perfil));
+    } catch {
+      setMensagemErro('Não foi possível salvar sua sessão. Tente novamente.');
+    } finally {
+      setCarregando(false);
+    }
   }
+
+  if (situacao === 'autenticada' && perfil) return <Redirect href={rotaDoPerfil(perfil)} />;
 
   return (
     <KeyboardAvoidingView style={estilos.tela} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -90,7 +91,8 @@ export default function TelaLogin() {
               {resposta.barbearias.map((barbearia) => (
                 <Pressable
                   key={barbearia.id}
-                  onPress={() => selecionarBarbearia(resposta, barbearia)}
+                  onPress={() => { if (!carregando) void selecionarBarbearia(resposta, barbearia); }}
+                  disabled={carregando}
                   accessibilityRole="button"
                   accessibilityLabel={`Entrar em ${barbearia.nome}`}
                   style={({ pressed }) => [estilos.opcao, pressed && estilos.opcaoPressionada]}
@@ -103,6 +105,7 @@ export default function TelaLogin() {
                 </Pressable>
               ))}
               <Botao titulo="Voltar ao login" variante="secundario" onPress={() => setResposta(null)} />
+              {mensagemErro ? <Text accessibilityRole="alert" style={estilos.erroGeral}>{mensagemErro}</Text> : null}
             </View>
           ) : (
             <View style={estilos.formulario}>
