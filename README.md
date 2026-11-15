@@ -2,11 +2,28 @@
 
 Aplicação para apoiar a gestão de barbearias, com recursos para organizar atendimentos e rotinas administrativas.
 
+## Visão geral
+
+O BarberFlow organiza o trabalho da equipe da barbearia, do registro dos atendimentos à conferência dos pagamentos e ao fechamento diário. A aplicação calcula os valores e repasses com base nos serviços e nas regras cadastradas pela barbearia. Ela não processa pagamentos nem oferece agendamento direto para clientes.
+
+### Perfis de usuário
+
+- **Dono:** administra a barbearia, os serviços e a equipe; aprova pedidos de entrada e revisa o fechamento do dia. Também pode registrar atendimentos.
+- **Barbeiro parceiro:** registra atendimentos, informa os serviços e a forma de pagamento, anexa comprovantes e acompanha sua agenda e seus repasses.
+- **Recepção:** confere os atendimentos do dia, corrige informações e valida ou rejeita registros, com justificativa.
+
+### Fluxo principal
+
+1. O barbeiro ou o dono registra um atendimento com cliente, serviços, forma de pagamento e comprovante.
+2. A recepção confere o registro e o valida ou rejeita; atendimentos rejeitados podem ser corrigidos.
+3. O dono revisa o fechamento diário e o confirma ou devolve à recepção para correções.
+4. O sistema calcula os repasses a partir dos atendimentos e dos valores registrados.
+
 ## Componentes
 
 - `app/`: aplicativo web e mobile desenvolvido com Expo, React Native e TypeScript.
 - `api/`: serviço backend desenvolvido com Node.js e Express.
-- Persistência e autenticação: Supabase.
+- `Supabase`: PostgreSQL para os dados, Auth para autenticação e Storage para os comprovantes.
 
 ## Requisitos
 
