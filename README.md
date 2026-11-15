@@ -2,8 +2,6 @@
 
 Aplicação para apoiar a gestão de barbearias, com recursos para organizar atendimentos e rotinas administrativas.
 
-> Projeto acadêmico em desenvolvimento.
-
 ## Componentes
 
 - `app/`: aplicativo web e mobile desenvolvido com Expo, React Native e TypeScript.

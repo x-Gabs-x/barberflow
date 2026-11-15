@@ -93,7 +93,13 @@ test('cadastro completo: dados mínimos, termos atuais, perfil fixo e contrato 2
   const barbearia = chamadas[3].payload;
   assert.match(barbearia.codigo, /^BRB-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
   assert.ok(!('telefone' in barbearia) && !('cidade' in barbearia));
-  assert.deepEqual(chamadas[4].payload, { usuario_id: ID_AUTH, estabelecimento_id: barbearia.id, perfil: 'dono', status: 'ativo' });
+  assert.deepEqual(chamadas[4].payload, {
+    usuario_id: ID_AUTH,
+    estabelecimento_id: barbearia.id,
+    perfil: 'dono',
+    status: 'ativo',
+    escote_percentual: 100,
+  });
 });
 
 test('inclui telefone e cidade da barbearia quando informados', async () => {

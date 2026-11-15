@@ -68,9 +68,10 @@ test('demo: parceiro recebe escote fixo de 40% ao ser aprovado', async () => {
   assert.equal(diego.escote_percentual, 40);
 });
 
-test('demo: escote do dono pode mudar, mas o dono não pode ser removido', async () => {
-  const r = await parte5.alterarEscote(demo, 'v1', 80);
-  assert.deepEqual(r, { ok: true, percentual_anterior: 70, percentual_novo: 80 });
+test('demo: escote do dono é fixo em 100%, mas o dono não pode ser removido', async () => {
+  await assert.rejects(parte5.alterarEscote(demo, 'v1', 80), (e) => e.codigo === 'escote_fixo');
+  const donoDemo = (await parte5.listarEquipe(demo, 'ativo')).find((m) => m.id === 'v1');
+  assert.equal(donoDemo.escote_percentual, 100);
   await assert.rejects(parte5.removerMembro(demo, 'v1'), (e) => e.codigo === 'dono_nao_removivel');
 });
 
@@ -142,11 +143,10 @@ test('banco: recusar marca o pedido como recusado', async () => {
   assert.deepEqual(consultas[1].dados, { status: 'recusado' });
 });
 
-test('banco: mudar escote guarda o valor anterior no histórico', async () => {
-  preparar(vinculo('dono', 'ativo', 70), ok, { data: null, error: null });
-  const r = await parte5.alterarEscote(dono, 'v9', 65);
-  assert.deepEqual(r, { ok: true, percentual_anterior: 70, percentual_novo: 65 });
-  assert.equal(consultas[2].dados.percentual_anterior, 70);
+test('banco: escote do dono é fixo em 100%', async () => {
+  preparar(vinculo('dono', 'ativo', 100));
+  await assert.rejects(parte5.alterarEscote(dono, 'v9', 65), (e) => e.codigo === 'escote_fixo');
+  assert.equal(consultas.length, 1);
 });
 
 test('banco: escote de parceiro não pode ser alterado dos 40%', async () => {
